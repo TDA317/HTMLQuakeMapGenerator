@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TDA's Single File HTML Quake 1 Random Map Generator</title>
+
+<!--
+
+    ============================================================================
+    == TDA's Single File HTML Quake 1 Random Map Generator                    ==
+    ============================================================================
+    == AUTHOR: TDA317                                                         ==
+    == PROJECT GENESIS:                                                       ==
+    == This tool was created over a month of 'vibe coding' by TDA317 in       ==
+    == collaboration with multiple AI assistants, including ChatGPT, Qwen,    ==
+    == and Google Gemini.                                                     ==
+    ==                                                                        ==
+    == BREAKTHROUGH & STABILITY:                                              ==
+    == The final, stable alpha version was achieved with Google's Gemini      ==
+    == 1.5 Pro, roleplaying as a fusion of John Carmack and John Romero to      ==
+    == diagnose and systematically eliminate critical, map-breaking geometry  ==
+    == and pipeline bugs.                                                     ==
+    ==                                                                        ==
+    == DEPENDENCIES: None. This tool is 100% vanilla JavaScript with no       ==
+    == external libraries.                                                    ==
+    ============================================================================
+
+-->
+
+<style>
+:root {
+  --bg:#0b0d10; --panel:#121318; --muted:#9fb3d9; --text:#dbe9ff; --accent:#7fb6ff;
+  --ok:#7ef7a2; --warn:#ffd2a; --danger:#ff7b7b;
+  --room:#c9ccd3; --court:#d9b26b; --corr:#9098a7;
+  --water:#3b82f6; --slime:#22c55e; --lava:#ef4444;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;}
+header{padding:12px 16px;border-bottom:1px solid #151923;background:#0f1115}
+header h1{margin:0;font-size:16px}
+.container{display:grid;grid-template-columns:380px 1fr;height:calc(100vh - 56px);gap:12px;padding:12px}
+.panel{padding:12px;background:#0f1216;border-radius:12px;border:1px solid #161b24;overflow:auto}
+.group{margin-bottom:12px;padding:10px;border-radius:10px;background:#0c0f14;border:1px solid #12151b}
+.group h3{margin:0 0 8px;color:var(--muted);font-size:13px;text-transform:uppercase}
+.row{display:flex;align-items:center;gap:8px;margin:6px 0}
+.row label{flex:1;color:#cdd9f7;font-size:13px}
+input[type=number]{width:100px;padding:6px;border-radius:8px;background:#0a0b0f;border:1px solid #1e2430;color:var(--text)}
+input[type=checkbox]{transform:translateY(2px)}
+button{background:#16202f;color:var(--text);border:1px solid #243145;padding:8px 10px;border-radius:10px;cursor:pointer;font-family:inherit;}
+button.primary{background:#1b3553;font-weight:bold;}
+button:disabled{background:#111a25;color:#5a6b8c;cursor:not-allowed;}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.canvasWrap{padding:12px}
+canvas{border-radius:12px;background:#05060a;border:1px solid #151823}
+.legend{margin-top:8px;display:flex;gap:12px;color:#bcd4ff;font-size:13px;flex-wrap:wrap}
+.sw{width:14px;height:14px;border-radius:3px;display:inline-block;vertical-align:middle;margin-right:4px;}
+.sw-room{background:var(--room)} .sw-court{background:var(--court)} .sw-corr{background:var(--corr)}
+.sw-water{background:var(--water)} .sw-slime{background:var(--slime)} .sw-lava{background:var(--lava)}
+.small{font-size:12px;color:#9fb3ff}
+.status{margin-top:8px;padding:8px;border-radius:8px;background:#0b1220;border:1px solid #121826;color:#cfe0ff;font-size:13px;white-space:pre-line}
+.entity-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;}
+</style>
+</head>
+<body>
+<header><h1>TDA's Single File HTML Quake 1 Random Map Generator</h1></header>
+
+<div class="container">
+  <aside class="panel">
+    <div class="group">
+      <h3>Workflow</h3>
+      <div class="btns">
+        <button id="forgeBtn" class="primary">Generate New Layout</button>
+        <button id="placeEntitiesBtn">Place Entities</button>
+        <button id="downloadBtn">Download .map File</button>
+      </div>
+       <div class="row"><label>Layout Seed</label><input type="number" id="layoutSeed" value="0"></div>
+       <div class="row"><label>Entity Seed</label><input type="number" id="entitySeed" value="0"></div>
+       <div class="btns">
+         <button id="randomizeSeedsBtn">Randomize Seeds</button>
+       </div>
+    </div>
+
+    <div class="group">
+      <h3>Layout & Dimensions</h3>
+      <div class="row"><label>Map Width (units)</label><input type="number" id="mapW" min="512" max="4096" step="128" value="2048"></div>
+      <div class="row"><label>Map Height (units)</label><input type="number" id="mapH" min="512" max="4096" step="128" value="2048"></div>
+      <div class="row"><label>Cell Size (units)</label><input type="number" id="cellSize" min="64" max="512" step="16" value="128"></div>
+      <div class="row"><label>Room Count</label><input type="number" id="roomCount" min="4" max="80" value="15"></div>
+      <div class="row"><label>Min Room Size</label><input type="number" id="minRoom" min="2" max="12" value="3"></div>
+      <div class="row"><label>Max Room Size</label><input type="number" id="maxRoom" min="3" max="24" value="7"></div>
+      <div class="row"><label>Hallway Width</label><input type="number" id="hallWidth" min="1" max="4" value="2"></div>
+      <div class="row"><label>Vertical Variation (±u)</label><input type="number" id="vertVar" min="0" max="256" step="8" value="48"></div>
+    </div>
+
+    <div class="group">
+      <h3>Ceiling & Lighting</h3>
+      <div class="row"><label>Room Ceiling Min</label><input type="number" id="roomCeilMin" min="96" max="512" step="16" value="128"></div>
+      <div class="row"><label>Room Ceiling Max</label><input type="number" id="roomCeilMax" min="96" max="512" step="16" value="256"></div>
+      <div class="row"><label>Hall Ceiling Min</label><input type="number" id="hallCeilMin" min="64" max="256" step="16" value="128"></div>
+      <div class="row"><label>Hall Ceiling Max</label><input type="number" id="hallCeilMax" min="64" max="256" step="16" value="128"></div>
+      <div class="row"><label>Light Brightness</label><input type="number" id="lightBrightness" min="100" max="600" value="250"></div>
+      <div class="row"><label>Generate Ceiling Detail</label><input type="checkbox" id="generateSoffits" checked></div>
+    </div>
+
+    <div class="group">
+      <h3>Detailing & Liquids</h3>
+      <div class="row"><label>Courtyard Chance %</label><input type="number" id="courtChance" min="0" max="80" value="15"></div>
+      <div class="row"><label>Water Chance %</label><input type="number" id="waterPct" min="0" max="60" value="10"></div>
+      <div class="row"><label>Slime Chance %</label><input type="number" id="slimePct" min="0" max="60" value="5"></div>
+      <div class="row"><label>Lava Chance %</label><input type="number" id="lavaPct" min="0" max="40" value="2"></div>
+      <div class="row"><label>Detail Liquid Pools</label><input type="checkbox" id="detailLiquids"></div>
+    </div>
+
+    <div class="group">
+        <h3>Monsters</h3>
+        <div class="entity-grid">
+            <div class="row"><label>Grunt</label><input type="number" id="monster_army" value="6"></div>
+            <div class="row"><label>Dog</label><input type="number" id="monster_dog" value="8"></div>
+            <div class="row"><label>Enforcer</label><input type="number" id="monster_enforcer" value="3"></div>
+            <div class="row"><label>Knight</label><input type="number" id="monster_knight" value="4"></div>
+            <div class="row"><label>Hell Knight</label><input type="number" id="monster_hell_knight" value="2"></div>
+            <div class="row"><label>Ogre</label><input type="number" id="monster_ogre" value="4"></div>
+            <div class="row"><label>Scrag</label><input type="number" id="monster_wizard" value="2"></div>
+            <div class="row"><label>Fiend</label><input type="number" id="monster_demon1" value="3"></div>
+            <div class="row"><label>Tarbaby</label><input type="number" id="monster_tarbaby" value="2"></div>
+            <div class="row"><label>Zombie</label><input type="number" id="monster_zombie" value="3"></div>
+            <div class="row"><label>Shambler</label><input type="number" id="monster_shambler" value="1"></div>
+            <div class="row"><label>Vore</label><input type="number" id="monster_shalrath" value="1"></div>
+        </div>
+    </div>
+    
+    <div class="group">
+        <h3>Weapons & Ammo</h3>
+        <div class="entity-grid">
+            <div class="row"><label>Shotgun</label><input type="number" id="weapon_shotgun" value="1"></div>
+            <div class="row"><label>S. Shotgun</label><input type="number" id="weapon_supershotgun" value="1"></div>
+            <div class="row"><label>Nailgun</label><input type="number" id="weapon_nailgun" value="1"></div>
+            <div class="row"><label>S. Nailgun</label><input type="number" id="weapon_supernailgun" value="1"></div>
+            <div class="row"><label>Grenade L.</label><input type="number" id="weapon_grenadelauncher" value="1"></div>
+            <div class="row"><label>Rocket L.</label><input type="number" id="weapon_rocketlauncher" value="1"></div>
+            <div class="row"><label>Shells</label><input type="number" id="item_shells" value="8"></div>
+            <div class="row"><label>Nails</label><input type="number" id="item_spikes" value="8"></div>
+            <div class="row"><label>Rockets</label><input type="number" id="item_rockets" value="4"></div>
+            <div class="row"><label>Cells</label><input type="number" id="item_cells" value="2"></div>
+        </div>
+    </div>
+
+    <div class="group">
+        <h3>Health, Armor & Powerups</h3>
+        <div class="entity-grid">
+            <div class="row"><label>Health</label><input type="number" id="item_health" value="10"></div>
+            <div class="row"><label>Green Armor</label><input type="number" id="item_armor1" value="2"></div>
+            <div class="row"><label>Yellow Armor</label><input type="number" id="item_armor2" value="1"></div>
+            <div class="row"><label>Red Armor</label><input type="number" id="item_armorInv" value="0"></div>
+            <div class="row"><label>Quad</label><input type="number" id="item_artifact_super_damage" value="1"></div>
+            <div class="row"><label>Pentagram</label><input type="number" id="item_artifact_invulnerability" value="1"></div>
+            <div class="row"><label>Ring</label><input type="number" id="item_artifact_invisibility" value="1"></div>
+            <div class="row"><label>Biosuit</label><input type="number" id="item_artifact_envirosuit" value="1"></div>
+        </div>
+    </div>
+
+
+    <div class="status" id="status">Ready. Press "Generate New Layout" to begin.</div>
+  </aside>
+
+  <main class="canvasWrap panel">
+    <canvas id="canvas" width="960" height="960"></canvas>
+    <div class="legend">
+      <span><i class="sw sw-room"></i> Room</span>
+      <span><i class="sw sw-court"></i> Courtyard</span>
+      <span><i class="sw sw-corr"></i> Corridor</span>
+      <span><i class="sw sw-water"></i> Water</span>
+      <span><i class="sw sw-slime"></i> Slime</span>
+      <span><i class="sw sw-lava"></i> Lava</span>
+    </div>
+  </main>
+</div>
+
+<script>
+'use strict';
+
+// --- UTILITY FUNCTIONS ---
+// A collection of micro-helpers to reduce verbosity and improve readability.
+const $id = id => document.getElementById(id);
+const setStatus = msg => $id('status').textContent = msg;
+const snap = (v, g) => Math.round(v / g) * g;
+const randInt = (min, max, rand) => Math.floor(rand() * (max - min + 1)) + min;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const setButtonsDisabled = d => {
+    $id('forgeBtn').disabled = d;
+    $id('downloadBtn').disabled = d;
+    $id('placeEntitiesBtn').disabled = d;
+};
+
+/**
+ * Creates a seeded pseudo-random number generator (PRNG).
+ * Uses a specific algorithm (a linear congruential generator) for deterministic results.
+ * This is CRITICAL for ensuring that the same seed always produces the same map layout.
+ * @param {number} s - The seed value.
+ * @returns {function(): number} A function that returns a random number between 0 and 1.
+ */
+function makeRNG(s) {
+    let t = s >>> 0;
+    return function() {
+        t += 0x6D2B79F5;
+        let r = Math.imul(t ^ (t >>> 15), 1 | t);
+        r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+        return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+    }
+}
+
+/**
+ * A simple Priority Queue implementation using a binary heap.
+ * Used for the Minimum Spanning Tree algorithm to connect rooms efficiently.
+ */
+class PriorityQueue {
+    constructor(c = (a, b) => a < b) { this._h = []; this._c = c }
+    size() { return this._h.length }
+    push(v) { this._h.push(v); this._siftUp() }
+    pop() { const p = this.peek(); if (this.size() > 1) this._swap(0, this.size() - 1); this._h.pop(); this._siftDown(); return p }
+    peek() { return this._h[0] }
+    _swap(i, j) {
+        [this._h[i], this._h[j]] = [this._h[j], this._h[i]] }
+    _compare(i, j) { return this._c(this._h[i], this._h[j]) }
+    _parent(i) { return Math.floor((i - 1) / 2) }
+    _left(i) { return 2 * i + 1 }
+    _right(i) { return 2 * i + 2 }
+    _siftUp() { let n = this.size() - 1; while (n > 0 && this._compare(n, this._parent(n))) { this._swap(n, this._parent(n)); n = this._parent(n) } }
+    _siftDown() { let n = 0; while ((this._left(n) < this.size() && this._compare(this._left(n), n)) || (this._right(n) < this.size() && this._compare(this._right(n), n))) { let m = (this._right(n) < this.size() && this._compare(this._right(n), this._left(n))) ? this._right(n) : this._left(n); this._swap(n, m); n = m } }
+}
+
+// --- GLOBAL STATE & CONSTANTS ---
+// Holds all world data after generation (grid, rooms, etc.). Null until forgeWorld() runs.
+let WORLD = null;
+// Holds all placed entities.
+let ENTITIES = [];
+
+// Tile types for the logical grid. These are used to identify different areas.
+const TILE_TYPES = { VOID: 0, ROOM: 1, CORR: 2, COURT: 3 };
+// Liquid types, separate from tile types.
+const LIQUID_TYPES = { NONE: 0, WATER: 4, SLIME: 5, LAVA: 6 };
+
+// Gameplay-critical constants for Quake's engine.
+const PLAYER_MAX_STEP_HEIGHT = 18; // The tallest ledge a player can walk up.
+const STAIR_RISE = 16; // The ideal height of a single stair step.
+const STAIR_RUN = 32; // The ideal depth of a single stair step.
+
+// --- CONFIG READING ---
+/**
+ * Reads all values from the HTML user interface and sanitizes them.
+ * This function is the single source of truth for all generation parameters.
+ * @returns {object} A configuration object with all necessary values for map generation.
+ */
+function readConfig() {
+    const c = {
+        // Layout & Dimensions
+        mapW: clamp(Number($id('mapW').value), 512, 4096),
+        mapH: clamp(Number($id('mapH').value), 512, 4096),
+        cellSize: snap(clamp(Number($id('cellSize').value), 64, 512), 16),
+        roomCount: clamp(Number($id('roomCount').value), 4, 80),
+        minRoom: clamp(Number($id('minRoom').value), 2, 12),
+        maxRoom: clamp(Number($id('maxRoom').value), 3, 24),
+        hallWidth: clamp(Number($id('hallWidth').value), 1, 4),
+        vertVar: snap(clamp(Number($id('vertVar').value), 0, 256), 8),
+        // Ceiling & Lighting
+        courtChance: clamp(Number($id('courtChance').value), 0, 80),
+        waterPct: clamp(Number($id('waterPct').value), 0, 60),
+        slimePct: clamp(Number($id('slimePct').value), 0, 60),
+        lavaPct: clamp(Number($id('lavaPct').value), 0, 40),
+        roomCeilMin: snap(clamp(Number($id('roomCeilMin').value), 96, 512), 16),
+        roomCeilMax: snap(clamp(Number($id('roomCeilMax').value), 96, 512), 16),
+        hallCeilMin: snap(clamp(Number($id('hallCeilMin').value), 64, 256), 16),
+        hallCeilMax: snap(clamp(Number($id('hallCeilMax').value), 64, 256), 16),
+        lightBrightness: clamp(Number($id('lightBrightness').value), 100, 600),
+        generateSoffits: $id('generateSoffits').checked,
+        detailLiquids: $id('detailLiquids').checked,
+        // Seeds
+        layoutSeed: Number($id('layoutSeed').value) || Date.now(),
+        entitySeed: Number($id('entitySeed').value) || Date.now() + 1,
+    };
+    // Derived properties
+    c.gridW = Math.floor(c.mapW / c.cellSize);
+    c.gridH = Math.floor(c.mapH / c.cellSize);
+    c.maxRoom = Math.max(c.minRoom, c.maxRoom);
+    c.roomCeilMax = Math.max(c.roomCeilMin, c.roomCeilMax);
+    c.hallCeilMax = Math.max(c.hallCeilMin, c.hallCeilMax);
+    return c;
+}
+
+/**
+ * Reads the desired counts for all entities (monsters, items, etc.) from the UI.
+ * @returns {object} An object mapping entity classnames to their desired counts.
+ */
+function readEntityConfig() {
+    const ids = ["monster_army", "monster_dog", "monster_enforcer", "monster_knight", "monster_hell_knight", "monster_ogre", "monster_wizard", "monster_demon1", "monster_tarbaby", "monster_zombie", "monster_shambler", "monster_shalrath", "weapon_shotgun", "weapon_supershotgun", "weapon_nailgun", "weapon_supernailgun", "weapon_grenadelauncher", "weapon_rocketlauncher", "item_shells", "item_spikes", "item_rockets", "item_cells", "item_health", "item_armor1", "item_armor2", "item_armorInv", "item_artifact_super_damage", "item_artifact_invulnerability", "item_artifact_invisibility", "item_artifact_envirosuit"];
+    return ids.reduce((acc, id) => (acc[id] = Number($id(id).value), acc), {});
+}
+
+
+// --- CORE GENERATION LOGIC ---
+
+/**
+ * "Carves" a corridor onto the logical grid between two points.
+ * Operates on the 2D grid representation of the map.
+ */
+function carveCorridorOnGrid(x1, y1, x2, y2, width, grid, height) {
+    const avgHeight = Math.round((height[y1][x1] + height[y2][x2]) / 2 / 16) * 16;
+    let cx = x1,
+        cy = y1;
+    const dx = Math.sign(x2 - x1),
+        dy = Math.sign(y2 - y1);
+    const carve = (x, y) => {
+        const half = Math.floor(width / 2);
+        for (let i = -half; i <= half; i++)
+            for (let j = -half; j <= half; j++) {
+                const nx = x + i,
+                    ny = y + j;
+                if (nx > 0 && nx < grid[0].length - 1 && ny > 0 && ny < grid.length - 1 && grid[ny][nx] === TILE_TYPES.VOID) {
+                    grid[ny][nx] = TILE_TYPES.CORR;
+                    height[ny][nx] = avgHeight;
+                }
+            }
+    };
+    while (cx !== x2) { carve(cx, cy);
+        cx += dx; }
+    while (cy !== y2) { carve(cx, cy);
+        cy += dy; }
+    carve(x2, y2);
+}
+
+/**
+ * The main function to generate the entire map layout.
+ * This is the heart of the generator.
+ */
+function forgeWorld() {
+    // 1. Setup & Seeding
+    const newSeed = Math.floor(Math.random() * 9999999);
+    $id('layoutSeed').value = newSeed;
+    const cfg = readConfig();
+    const rand = makeRNG(cfg.layoutSeed);
+    const W = cfg.gridW, H = cfg.gridH;
+    const grid = Array.from({ length: H }, () => Array(W).fill(TILE_TYPES.VOID));
+    const height = Array.from({ length: H }, () => Array(W).fill(0));
+    const rooms = [];
+
+    // 2. Room Placement (BSP-like via random placement and overlap rejection)
+    for (let i = 0; i < cfg.roomCount * 5 && rooms.length < cfg.roomCount; i++) {
+        const rw = randInt(cfg.minRoom, cfg.maxRoom, rand), rh = randInt(cfg.minRoom, cfg.maxRoom, rand);
+        const x = randInt(1, W - rw - 2, rand), y = randInt(1, H - rh - 2, rand);
+        const newRoom = { x, y, w: rw, h: rh, id: rooms.length, centerX: x + Math.floor(rw / 2), centerY: y + Math.floor(rh / 2) };
+        if (rooms.some(r => x < r.x + r.w && x + rw > r.x && y < r.y + r.h && y + rh > r.y)) continue;
+        newRoom.type = (rand() * 100 < cfg.courtChance) ? TILE_TYPES.COURT : TILE_TYPES.ROOM;
+        newRoom.ceilHeight = randInt(cfg.roomCeilMin, cfg.roomCeilMax, rand);
+        rooms.push(newRoom);
+        const roomHeight = snap((rand() * 2 - 1) * cfg.vertVar, 16);
+        for (let yy = y; yy < y + rh; yy++)
+            for (let xx = x; xx < x + rw; xx++) { grid[yy][xx] = newRoom.type;
+                height[yy][xx] = roomHeight; }
+    }
+    if (rooms.length < 2) { setStatus("Error: Not enough rooms placed."); return; }
+
+    // 3. Room Connection (Minimum Spanning Tree with Prim's Algorithm)
+    const connected = new Set([0]);
+    const pq = new PriorityQueue((a, b) => a.dist < b.dist);
+    let currentRoom = rooms[0];
+    while (connected.size < rooms.length) {
+        for (const other of rooms)
+            if (!connected.has(other.id)) pq.push({ from: currentRoom, to: other, dist: Math.hypot(currentRoom.centerX - other.centerX, currentRoom.centerY - other.centerY) });
+        let next;
+        do { next = pq.pop(); } while (next && connected.has(next.to.id));
+        if (next) {
+            carveCorridorOnGrid(next.from.centerX, next.from.centerY, next.to.centerX, next.to.centerY, cfg.hallWidth, grid, height, cfg);
+            currentRoom = next.to;
+            connected.add(currentRoom.id);
+        } else break;
+    }
+    
+    // 4. Liquid Placement
+    const liquid=Array.from({length:H},()=>Array(W).fill(LIQUID_TYPES.NONE));
+    rooms.forEach(r=>{if(r.w<3||r.h<3)return;const p=rand()*100;let lType=LIQUID_TYPES.NONE;if(p<cfg.lavaPct)lType=LIQUID_TYPES.LAVA;else if(p<cfg.lavaPct+cfg.slimePct)lType=LIQUID_TYPES.SLIME;else if(p<cfg.lavaPct+cfg.slimePct+cfg.waterPct)lType=LIQUID_TYPES.WATER;if(lType!==LIQUID_TYPES.NONE){const pX=r.x+1,pY=r.y+1,pW=r.w-2,pH=r.h-2;const bH=height[r.centerY][r.centerX];const lD=snap(randInt(32,96,rand),16);for(let yy=pY;yy<pY+pH;yy++)for(let xx=pX;xx<pX+pW;xx++){liquid[yy][xx]=lType;height[yy][xx]={surface:bH-8,bottom:bH-8-lD};}}});
+
+    // 5. Find Safe Spawn Locations (for entities)
+    const safeSmall = [], safeLarge = [];
+    const checkSpot = (x, y, hull) => {
+        const dist = Math.ceil((hull / 2 + 16) / cfg.cellSize);
+        const z = (typeof height[y][x] === 'object') ? height[y][x].surface : height[y][x];
+        for (let yy = y - dist; yy <= y + dist; yy++)
+            for (let xx = x - dist; xx <= x + dist; xx++) {
+                if (xx < 0 || xx >= W || yy < 0 || yy >= H || grid[yy][xx] === TILE_TYPES.VOID) return false;
+                const h = height[yy][xx];
+                if (((typeof h === 'object') ? h.surface : h) !== z) return false;
+            }
+        return true;
+    };
+    for (let y = 0; y < H; y++)
+        for (let x = 0; x < W; x++) {
+            if (grid[y][x] !== TILE_TYPES.VOID && liquid[y][x] === LIQUID_TYPES.NONE) {
+                if (checkSpot(x, y, 32)) safeSmall.push({ x, y });
+                if (checkSpot(x, y, 64)) safeLarge.push({ x, y });
+            }
+        }
+    
+    // 6. Finalize World Object
+    WORLD={cfg,W,H,grid,height,rooms,liquid,safeSmallSpots:safeSmall,safeLargeSpots:safeLarge};ENTITIES=[];setStatus(`Generated map layout with ${rooms.length} rooms. Seed: ${cfg.layoutSeed}.`);drawPreview();}
+
+
+// --- ENTITY PLACEMENT ---
+
+/**
+ * Populates the generated world with entities based on UI settings.
+ */
+function populateEntities() {
+    if (!WORLD) { setStatus("Generate a map layout first."); return; }
+    const newSeed = Math.floor(Math.random() * 9999999);
+    $id('entitySeed').value = newSeed;
+    const cfg = readConfig();
+    const entityCfg = readEntityConfig();
+    const rand = makeRNG(cfg.entitySeed);
+    ENTITIES = [];
+    if (WORLD.safeSmallSpots.length === 0) { setStatus("Error: No valid spawn points found."); return; }
+
+    const centeredOriginPrefixes = ['monster_', 'info_player_start', 'item_artifact_'];
+
+    /**
+     * Determines the correct Z-coordinate for a given entity type.
+     * Monsters/players/artifacts have their origin in the center.
+     * Weapons/ammo/health have their origin at their base.
+     * @param {number} x - grid x
+     * @param {number} y - grid y
+     * @param {string} classname - The entity's classname.
+     * @returns {number} The appropriate z-coordinate for spawning.
+     */
+    const getZ = (x, y, classname) => {
+        const h = WORLD.height[y][x];
+        const floor_z = (typeof h === 'object') ? h.surface : h;
+        const isCentered = centeredOriginPrefixes.some(prefix => classname.startsWith(prefix));
+        
+        if (isCentered) {
+            // This offset lifts a center-origin entity so its bounding box bottom rests on the floor.
+            // 28 is a robust value for most common Quake monsters.
+            return floor_z + 28;
+        } else {
+            // A minimal offset for base-origin entities (items) to prevent z-fighting.
+            return floor_z + 1;
+        }
+    };
+    
+    // Place Player Start
+    const start = WORLD.safeSmallSpots[randInt(0, WORLD.safeSmallSpots.length - 1, rand)];
+    ENTITIES.push({ classname: 'info_player_start', x: (start.x + 0.5) * cfg.cellSize, y: (start.y + 0.5) * cfg.cellSize, z: getZ(start.x, start.y, 'info_player_start'), angle: randInt(0, 7, rand) * 45 });
+    
+    // Place Lights
+    WORLD.rooms.forEach(r => { const h = WORLD.height[r.centerY][r.centerX]; const fz = typeof h === 'object' ? h.surface : h; ENTITIES.push({ classname: 'light', x: (r.centerX + 0.5) * cfg.cellSize, y: (r.centerY + 0.5) * cfg.cellSize, z: fz + r.ceilHeight - 24, light: cfg.lightBrightness }); });
+    
+    // Generic placement function for all other entities
+    const place = (cn, count, isLarge) => { const spots = isLarge ? WORLD.safeLargeSpots : WORLD.safeSmallSpots; if (spots.length === 0 && count > 0) return; for (let i = 0; i < count; i++) { const pt = spots[randInt(0, spots.length - 1, rand)]; ENTITIES.push({ classname: cn, x: (pt.x + 0.5) * cfg.cellSize, y: (pt.y + 0.5) * cfg.cellSize, z: getZ(pt.x, pt.y, cn), angle: randInt(0, 7, rand) * 45 }); } };
+    
+    Object.entries(entityCfg).forEach(([key, value]) => { if (value > 0) { const isLarge = ['monster_shambler', 'monster_ogre', 'monster_shalrath', 'monster_hell_knight'].includes(key); place(key, value, isLarge); } });
+    
+    setStatus(`Placed entities with seed: ${cfg.entitySeed}`);
+    drawPreview();
+}
+
+
+// --- MAP EXPORT ---
+
+/**
+ * Creates a default set of texture properties for a brush face.
+ * @param {string} tex - The name of the texture.
+ * @returns {object} A fully defined texture object for all 6 faces.
+ */
+function getDefaultTextures(tex){const c={tex,rot:0,x_scale:1,y_scale:1};return{top:{...c,u:[1,0,0,0],v:[0,-1,0,0]},bottom:{...c,u:[1,0,0,0],v:[0,-1,0,0]},west:{...c,u:[0,1,0,0],v:[0,0,-1,0]},east:{...c,u:[0,1,0,0],v:[0,0,-1,0]},north:{...c,u:[1,0,0,0],v:[0,0,-1,0]},south:{...c,u:[1,0,0,0],v:[0,0,-1,0]}};}
+
+/**
+ * Converts a simple coordinate-based brush definition into the full Quake .map format text.
+ * @param {string[]} out - The array of strings to push the formatted brush text to.
+ * @param {object} b - The brush dimensions {x1, y1, z1, x2, y2, z2}.
+ * @param {object} bt - The texture object from getDefaultTextures().
+ */
+function pushBrush(out,b,bt){b={x1:Math.round(b.x1),y1:Math.round(b.y1),z1:Math.round(b.z1),x2:Math.round(b.x2),y2:Math.round(b.y2),z2:Math.round(b.z2)};if(b.x1>=b.x2||b.y1>=b.y2||b.z1>=b.z2)return;const f=(v1,v2,v3,ft)=>`( ${v1} ) ( ${v2} ) ( ${v3} ) ${ft.tex} [ ${ft.u.join(' ')} ] [ ${ft.v.join(' ')} ] ${ft.rot} ${ft.x_scale} ${ft.y_scale}`;out.push('{',f(`${b.x1} ${b.y2} ${b.z2}`,`${b.x2} ${b.y2} ${b.z2}`,`${b.x2} ${b.y1} ${b.z2}`,bt.top),f(`${b.x1} ${b.y1} ${b.z1}`,`${b.x2} ${b.y1} ${b.z1}`,`${b.x2} ${b.y2} ${b.z1}`,bt.bottom),f(`${b.x1} ${b.y2} ${b.z2}`,`${b.x1} ${b.y1} ${b.z2}`,`${b.x1} ${b.y1} ${b.z1}`,bt.west),f(`${b.x2} ${b.y2} ${b.z1}`,`${b.x2} ${b.y1} ${b.z1}`,`${b.x2} ${b.y1} ${b.z2}`,bt.east),f(`${b.x2} ${b.y2} ${b.z2}`,`${b.x1} ${b.y2} ${b.z2}`,`${b.x1} ${b.y2} ${b.z1}`,bt.north),f(`${b.x2} ${b.y1} ${b.z1}`,`${b.x1} ${b.y1} ${b.z1}`,`${b.x1} ${b.y1} ${b.z2}`,bt.south),'}');}
+
+/**
+ * Generates the brushwork for a full staircase between two cells.
+ * This version creates chunky, full-width steps that are solid down to the lower floor for a robust seal.
+ */
+function pushStaircase(out, h_x, h_y, l_x, l_y, h_z, l_z, dir, stepTex) {
+    const diff = h_z - l_z;
+    const num = Math.max(1, Math.round(diff / STAIR_RISE));
+    const step_rise = diff / num;
+    const cs = WORLD.cfg.cellSize;
+
+    for (let i = 0; i < num; i++) {
+        const step_z_top = h_z - (i * step_rise);
+        const z_bot = l_z; // Make each step a solid brush down to the base.
+        const sr = i * STAIR_RUN;
+        let x1, y1, x2, y2;
+
+        if (dir === 'n') { x1 = l_x; y1 = l_y + cs - STAIR_RUN - sr; x2 = l_x + cs; y2 = y1 + STAIR_RUN; } 
+        else if (dir === 's') { x1 = l_x; y1 = l_y + sr; x2 = l_x + cs; y2 = y1 + STAIR_RUN; } 
+        else if (dir === 'e') { y1 = l_y; x1 = l_x + sr; y2 = l_y + cs; x2 = x1 + STAIR_RUN; } 
+        else { y1 = l_y; x1 = l_x + cs - STAIR_RUN - sr; y2 = l_y + cs; x2 = x1 + STAIR_RUN; }
+        
+        pushBrush(out, { x1, y1, z1: z_bot, x2, y2, z2: step_z_top }, stepTex);
+    }
+}
+
+/**
+ * The primary function that translates the logical WORLD object into Quake brush geometry.
+ * This is executed in multiple passes to handle dependencies correctly.
+ */
+function exportGeometryToMap(callback){const{W,H,cfg,grid,height,liquid,rooms}=WORLD;const{cellSize,hallCeilMin,hallCeilMax}=cfg;const out=[];
+const textures={
+    indoor:{wall:getDefaultTextures('32_blue_1'),floor:getDefaultTextures('32_blue_2'),ceil:getDefaultTextures('32_blue_3'),stair:getDefaultTextures('64_cyan_1')},
+    outdoor:{wall:getDefaultTextures('32_brown_1'),floor:getDefaultTextures('32_brown_2'),trim:getDefaultTextures('32_brown_3'),stair:getDefaultTextures('64_cyan_3')},
+    detail:getDefaultTextures('16_gold_1'),
+    liquid:{water:getDefaultTextures('*water'),slime:getDefaultTextures('*slime'),lava:getDefaultTextures('*lava')},
+    sky:getDefaultTextures('SKY'),
+};
+const rand=makeRNG(cfg.layoutSeed);
+const getCellInfo=(x,y)=>{if(x<0||x>=W||y<0||y>=H)return{tile:TILE_TYPES.VOID};const t=grid[y][x];if(t===TILE_TYPES.VOID)return{tile:t};const h=height[y][x];const i=typeof h==='object';const f=i?h.bottom:h;let cH=0;if(t===TILE_TYPES.CORR){cH=randInt(hallCeilMin,hallCeilMax,rand);}else{const r=rooms.find(rm=>x>=rm.x&&x<rm.x+rm.w&&y>=rm.y&&y<rm.y+rm.h);cH=r?r.ceilHeight:randInt(cfg.roomCeilMin,cfg.roomCeilMax,rand);}const c=f+cH;return{x,y,tile:t,isLiquid:i,h_info:h,floorZ:f,ceilZ:c};};
+const riserTransitions=[];
+// Pass 1: Build the fundamental floor and ceiling brushes for every cell.
+const pass1=(x,y)=>{const c=getCellInfo(x,y);if(c.tile===TILE_TYPES.VOID)return;const x1=x*cellSize,y1=y*cellSize,x2=x1+cellSize,y2=y1+cellSize;const floorTex=c.tile===TILE_TYPES.COURT?textures.outdoor.floor:textures.indoor.floor;pushBrush(out,{x1,y1,z1:c.floorZ-16,x2,y2,z2:c.floorZ},floorTex);if(!c.isLiquid&&c.tile!==TILE_TYPES.COURT)pushBrush(out,{x1,y1,z1:c.ceilZ,x2,y2,z2:c.ceilZ+16},textures.indoor.ceil);};
+// Pass 2: Build all vertical walls between cells, seal the map edges, and handle transitions between heights.
+const pass2=(x,y)=>{const cA=getCellInfo(x,y);if(cA.tile===TILE_TYPES.VOID)return;
+[{dx:0,dy:1,dir:'s'},{dx:1,dy:0,dir:'e'},{dx:0,dy:-1,dir:'n'},{dx:-1,dy:0,dir:'w'}].forEach(({dx,dy,dir})=>{const cB=getCellInfo(x+dx,y+dy);
+const cA_is_court=cA.tile===TILE_TYPES.COURT;
+// Wall generation at the absolute edge of the map.
+if(cB.tile===TILE_TYPES.VOID){const z1=cA.floorZ-16;let z2=cA.ceilZ+16;if(cA_is_court)z2=cA.floorZ+128;const wallTex=cA_is_court?textures.outdoor.wall:textures.indoor.wall;let wx1,wy1,wx2,wy2;if(dir==='s'){wx1=x*cellSize;wy1=(y+1)*cellSize-16;wx2=(x+1)*cellSize;wy2=(y+1)*cellSize;}else if(dir==='n'){wx1=x*cellSize;wy1=y*cellSize;wx2=(x+1)*cellSize;wy2=y*cellSize+16;}else if(dir==='e'){wx1=(x+1)*cellSize-16;wy1=y*cellSize;wx2=(x+1)*cellSize;wy2=(y+1)*cellSize;}else{wx1=x*cellSize;wy1=y*cellSize;wx2=x*cellSize+16;wy2=(y+1)*cellSize;} pushBrush(out,{x1:wx1,y1:wy1,z1,x2:wx2,y2:wy2,z2},wallTex);
+if(cA_is_court){pushBrush(out,{x1:wx1,y1:wy1,z1:z2,x2:wx2,y2:wy2,z2:z2+16},textures.outdoor.trim);}return;}
+// Optimization to only process each cell pair once.
+if(y*W+x>(y+dy)*W+(x+dx))return;const cB_is_court=cB.tile===TILE_TYPES.COURT;const isOutdoorTransition=cA_is_court||cB_is_court;
+// Find floor height differences and mark them for Pass 3 (stairs).
+const f_d=cA.floorZ-cB.floorZ;if(Math.abs(f_d)>0.1){const x1=cA.x*cellSize,y1=cA.y*cellSize,x2=x1+cellSize,y2=y1+cellSize;let wx1,wy1,wx2,wy2;if(dir==='s'){wx1=x1;wy1=y2-16;wx2=x2;wy2=y2;}else{wx1=x2-16;wy1=y1;wx2=x2;wy2=y2;}const riserBrush={x1:wx1,y1:wy1,z1:Math.min(cA.floorZ,cB.floorZ),x2:wx2,y2:wy2,z2:Math.max(cA.floorZ,cB.floorZ)};riserTransitions.push({brush:riserBrush,cellA:cA,cellB:cB,dir:dir,isOutdoor:isOutdoorTransition});}
+// Find ceiling/parapet height differences and create soffit/trim brushes.
+const cA_z=cA_is_court?cA.floorZ+128:cA.ceilZ;const cB_z=cB_is_court?cB.floorZ+128:cB.ceilZ;if(Math.abs(cA_z-cB_z)>0.1&&!cA.isLiquid&&!cB.isLiquid){if(cfg.generateSoffits||isOutdoorTransition){const x1=cA.x*cellSize,y1=cA.y*cellSize,x2=x1+cellSize,y2=y1+cellSize;let wx1,wy1,wx2,wy2;if(dir==='s'){wx1=x1;wy1=y2-16;wx2=x2;wy2=y2;}else{wx1=x2-16;wy1=y1;wx2=x2;wy2=y2;}const soffitTex=isOutdoorTransition?textures.outdoor.wall:textures.detail;const soffit_z1=Math.min(cA_z,cB_z),soffit_z2=Math.max(cA_z,cB_z);pushBrush(out,{x1:wx1,y1:wy1,z1:soffit_z1,x2:wx2,y2:wy2,z2:soffit_z2},soffitTex);
+if(isOutdoorTransition){pushBrush(out,{x1:wx1,y1:wy1,z1:soffit_z2,x2:wx2,y2:wy2,z2:soffit_z2+16},textures.outdoor.trim);}}}});};
+// Pass 3: Build complex geometry like stairs and add details like liquids.
+const pass3=()=>{setStatus('Exporting... (Building Details)');
+// Process all the height transitions found in Pass 2.
+riserTransitions.forEach(t=>{const{cellA:cA,cellB:cB,dir,brush,isOutdoor}=t;const f_d=cA.floorZ-cB.floorZ;if(Math.abs(f_d)>PLAYER_MAX_STEP_HEIGHT&&!cA.isLiquid&&!cB.isLiquid){const stepTex=isOutdoor?textures.outdoor.stair:textures.indoor.stair;if(f_d>0){pushStaircase(out,cA.x*cellSize,cA.y*cellSize,cB.x*cellSize,cB.y*cellSize,cA.floorZ,cB.floorZ,dir,stepTex);}else{pushStaircase(out,cB.x*cellSize,cB.y*cellSize,cA.x*cellSize,cA.y*cellSize,cB.floorZ,cA.floorZ,dir==='s'?'n':dir==='n'?'s':dir==='e'?'w':'e',stepTex);}}else{const riserTex=isOutdoor?textures.outdoor.wall:textures.indoor.wall;pushBrush(out,brush,riserTex);}});
+// Add liquids and details.
+for(let y=0;y<H;y++){for(let x=0;x<W;x++){const c=getCellInfo(x,y);if(c.tile===TILE_TYPES.VOID)continue;
+if(c.isLiquid){const x1=x*cellSize,y1=y*cellSize,x2=x1+cellSize,y2=y1+cellSize;let liquidTex;if(liquid[y][x]===LIQUID_TYPES.SLIME)liquidTex=textures.liquid.slime;else if(liquid[y][x]===LIQUID_TYPES.LAVA)liquidTex=textures.liquid.lava;else liquidTex=textures.liquid.water;pushBrush(out,{x1,y1,z1:c.h_info.bottom,x2,y2,z2:c.h_info.surface},liquidTex);
+if(cfg.detailLiquids&&rand()>0.6){const wW=16;for(let i=x1;i<x2;i+=wW*2)pushBrush(out,{x1:i,y1,z1:c.h_info.bottom,x2:i+wW,y2,z2:c.h_info.surface},textures.detail);for(let i=y1;i<y2;i+=wW*2)pushBrush(out,{x1,y1:i,z1:c.h_info.bottom,x2,y2:i+wW,z2:c.h_info.surface},textures.detail);}}}}
+callback(out);};
+
+/**
+ * Orchestrates the multi-pass geometry generation to ensure correct ordering.
+ * Uses timeouts to prevent the browser from freezing on large maps.
+ */
+function runPasses(passFns,passNames,finalFn){let i=0;const runNext=()=>{if(i<passFns.length){let y=0;setStatus(`Exporting... (${passNames[i]} 0%)`);function chunk(){const endY=Math.min(y+16,H);for(;y<endY;y++)for(let x=0;x<W;x++)passFns[i](x,y);if(y<H){setStatus(`Exporting... (${passNames[i]} ${Math.round(y/H*100)}%)`);setTimeout(chunk,0);}else{i++;runNext();}}chunk();}else{finalFn();}};runNext();}
+runPasses([pass1,pass2],['Base Geometry','Sealing World'],pass3);}
+
+/**
+ * Main function to trigger the final .map file download.
+ * Gathers all geometry and entity data and formats it into a single string.
+ */
+function downloadMap(){if(!WORLD){alert('Generate map first!');return;} setButtonsDisabled(true);exportGeometryToMap(g=>{setStatus('Finalizing...');const out=['{','"classname" "worldspawn"',`"message" "Generated Map - Seed ${WORLD.cfg.layoutSeed}"`,'"wad" "QUAKE.WAD"',...g,'}'];ENTITIES.forEach(e=>{out.push('{',`"classname" "${e.classname}"`,`"origin" "${Math.round(e.x)} ${Math.round(e.y)} ${Math.round(e.z)}"`);if(e.angle!==undefined)out.push(`"angle" "${e.angle}"`);if(e.light!==undefined)out.push(`"light" "${e.light}"`);out.push('}');});const data=out.join('\n');const blob=new Blob([data],{type:'text/plain'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`q1_gen_${WORLD.cfg.layoutSeed}.map`;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);setStatus('Map file downloaded!');setButtonsDisabled(false);});}
+
+
+// --- PREVIEW ---
+
+/**
+ * Draws the 2D top-down preview of the map layout on the HTML canvas.
+ */
+function drawPreview(){const canvas=$id('canvas');const ctx=canvas.getContext('2d');const W=WORLD?WORLD.W:Math.floor(Number($id('mapW').value)/Number($id('cellSize').value));const H=WORLD?WORLD.H:Math.floor(Number($id('mapH').value)/Number($id('cellSize').value));ctx.fillStyle='#05060a';ctx.fillRect(0,0,canvas.width,canvas.height);if(!WORLD){ctx.fillStyle='#9fb3ff';ctx.font='16px sans-serif';ctx.textAlign='center';ctx.fillText('Generate a layout to see a preview.',canvas.width/2,canvas.height/2);return;}
+const pad=8;const cellPx=Math.floor((Math.min(canvas.width,canvas.height)-pad*2)/Math.max(W,H,1));const ox=Math.floor((canvas.width-cellPx*W)/2);const oy=Math.floor((canvas.height-cellPx*H)/2);
+// Draw the map tiles
+for(let y=0;y<H;y++){for(let x=0;x<W;x++){let color;const tile=WORLD.grid[y][x];if(tile===TILE_TYPES.ROOM)color='#c9ccd3';else if(tile===TILE_TYPES.CORR)color='#9098a7';else if(tile===TILE_TYPES.COURT)color='#d9b26b';else continue;const liquid=WORLD.liquid[y][x];if(liquid===LIQUID_TYPES.WATER)color='#3b82f6';else if(liquid===LIQUID_TYPES.SLIME)color='#22c55e';else if(liquid===LIQUID_TYPES.LAVA)color='#ef4444';ctx.fillStyle=color;ctx.fillRect(ox+x*cellPx,oy+y*cellPx,cellPx-0.5,cellPx-0.5);}}
+// Draw entity markers
+ctx.font=`${Math.max(10,Math.floor(cellPx*0.8))}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+ENTITIES.forEach(e=>{const sx=Math.floor(e.x/WORLD.cfg.cellSize),sy=Math.floor(e.y/WORLD.cfg.cellSize);const px=ox+sx*cellPx+cellPx/2,py=oy+sy*cellPx+cellPx/2;let char='?',color='#ffd86b';if(e.classname.startsWith('monster_')){char='M';color='#ff7474';}else if(e.classname.startsWith('weapon_')){char='W';color='#7ea8ff';}else if(e.classname.startsWith('item_')){char='I';color='#b1f2a1';}
+if(e.classname==='info_player_start'){char='S';color='#ffffff';}else if(e.classname==='light'){return;} // Don't draw lights on the preview
+ctx.fillStyle=color;ctx.fillText(char,px,py+1);});}
+
+// --- UI WIRING ---
+// Connect the HTML buttons to their corresponding JavaScript functions.
+$id('forgeBtn').onclick=forgeWorld;
+$id('downloadBtn').onclick=downloadMap;
+$id('placeEntitiesBtn').onclick=populateEntities;
+$id('randomizeSeedsBtn').onclick=()=>{ $id('layoutSeed').value=Math.floor(Math.random()*9999999);$id('entitySeed').value=Math.floor(Math.random()*9999999);};
+
+// --- INITIALIZATION ---
+// Generate a map on the first page load to show the user something immediately.
+forgeWorld();
+
+</script>
+</body>
+</html>
