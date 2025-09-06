@@ -15,8 +15,23 @@ This is an early, alpha release. The machine is stable, but it's not finished. H
 
 *   **It Makes Solid Maps!** The generator creates simple but architecturally sound levels that, with one major exception, seal properly and are ready to compile.
 *   **The SKY is the VOID!** The big caveat: The generator does not currently create skyboxes. Courtyard areas will have openings straight to the void. This is the top priority for the next major feature update. For now, you can either enjoy the brutalist, open-roof aesthetic or build your own skybox around the level in an editor to get it to properly VIZ.
-*   **Single Player Focused:** Light and entity placement is functional but very basic. There are no `trigger_changelevel` entities to end a map and no deathmatch starts have been implemented, though adding them is trivial.
+*   **Single Player Focused:** Light and entity placement is functional but very basic. ~~There are no `trigger_changelevel` entities to end a map and no deathmatch starts have been implemented, though adding them is trivial.~~
 *   **Lots of Knobs to Turn:** The GUI provides a ton of options for controlling the map's dimensions, room count, verticality, and entity population. Go wild.
+
+## Alpha v1.051 notes:
+*   **Improved item and enemy placement**
+* Before, things were simply placed inside the map. Now, health and ammo boxes are placed along walls. You'd never believe the trouble I had getting the .bsp model items to be properly spaced from the walls (The AI just wasn't getting it)
+* Fish in water, other enemies on land. Shamblers shouldn't get stuck in walls or low ceilings. Its not 100% but it is MUCH improved. 
+*   **Game modes** 
+* Single player actually has an end. A start room is forced to be placed in the first 5% of the X axis. An end room with an alter containing a trigger_changelevel going nowhere is on the opposite 5% of the map. The rest of the map is built between.
+* Co-op spawns are right there with Single Player.
+* Deathmatch spawns are spread out as much as logically possible.
+*  **More Textures**
+*   Added a few more wads from **Aleksander "Mar-san" Marshall's Prototype WAD** It's recommended you add all his textures to the wad because I plan to add more as features creep.
+*   **GUI Improvements**
+*   Proper seeds. "Forge World" randomizes geometry. "Place Entities" randomizes entities. Two user input seed spaces (one for each) and a "Forge From Seeds" button to build from the current/user's seeds.
+*   Simple key with status indicator added to right. Preview resizes to browser window.
+*   Too many changes to list. Lots of default values tweaked. And much more you may never notice.
 
 ## How to Use
 
@@ -29,12 +44,12 @@ This is an early, alpha release. The machine is stable, but it's not finished. H
 
 ### **IMPORTANT: Texture Dependency**
 
-This generator is hard-coded to use textures from **Aleksander "Mar-san" Marshall's Prototype WAD**. It's a fantastic toolkit for getting a clean, readable look.
+This generator is currently hard-coded to use textures from **Aleksander "Mar-san" Marshall's Prototype WAD**. It's a fantastic toolkit for getting a clean, readable look.
 
 *   **You can download it here:** [Prototype WAD on Slipseer](https://www.slipseer.com/index.php?resources/prototype-wad.263/)
 
 After downloading the `.map` file, you MUST open it in a text editor (like Notepad++) and edit the `worldspawn` entity to point to the location of your WAD file. Change this line:
-"wad" "QUAKE.WAD"
+"wad" " "
 To this:
 "wad" "C:\path\to\your\wads\prototype_basic_1_3.wad; C:\path\to\your\wads\prototype_liquids_1_3.wad; C:\path\to\your\wads\prototype_Skies_1_3.wad"
 
