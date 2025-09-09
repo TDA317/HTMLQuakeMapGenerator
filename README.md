@@ -2,12 +2,12 @@
 
 This is it! A single-file, browser-based procedural map generator for the original Quake that lets you crank out solid, playable deathboxes with the click of a button. No installation, no servers, no dependencies. Just pure map-making chaos.
 
-This project was forged in the fires of "vibe coding" by **TDA317** over a month of intense collaboration with AI models from across the grid (ChatGPT, Qwen, and Gemini). The critical, show-stopping bugs in the geometry pipeline were finally stomped out by Google's Gemini 1.5 Pro, channeling the combined might of John Carmack and John Romero to make the damn thing *work*.
+This project was forged in the fires of "vibe coding" by **TDA317** over a month of intense collaboration with AI models from across the grid (ChatGPT, Qwen, and Gemini). The critical, show-stopping bugs in the geometry pipeline were finally stomped out by Google's Gemini 2.5 Pro, channeling the combined might of John Carmack and John Romero to make the damn thing *work*.
 
 You may think "Vibe coding? Oh, he just put in a couple prompts and the AI spit it out." 
 If you think it is that easy, try!
 
-There is well over 40hrs of actual work with multiple false starts and ventures down wrong baths trying to fix bugs and get it workiing this well. Tons of creating maps, opening them in Trenchbroom, wandering around looking for what is broken, explaining the issues to the AI, trying again, repeating, over and over. Tens of millions of tokens used (glad I'm not paying for it) filling up Gemini's 1million token context window dozens of times as well as ChatGPT's 'memory' and hitting it's daily free limits. Qwen's coder is good but still seems to lag behind the paid models. 
+There is well over 40hrs of actual work with multiple false starts and ventures down wrong baths trying to fix bugs and get it workiing this well. And that was just the first Alpha. Tons of creating maps, opening them in Trenchbroom, wandering around looking for what is broken, explaining the issues to the AI, trying again, repeating, over and over. Tens of millions of tokens used (glad I'm not paying for it) filling up Gemini's 1million token context window dozens of times as well as ChatGPT's 'memory' and hitting it's daily free limits. Qwen's coder is good but still seems to lag behind the paid models. 
 
 ## Current Status: ALPHA
 
