@@ -80,5 +80,5 @@ The goal is to make this thing even better. The future holds:
 
 This is for the community.
 
-*   **The Generator:** Do whatever you want with this `.html` file for any non-commercial purpose. If you modify it and release your own version, giving credit is appreciated!
+*   **The Generator:** Do whatever you want with this `.html` file. If you modify it and release your own version, giving credit is required!
 *   **The .map Files:** Any `.map` you generate is **100% yours**. Do anything you want with it. If you build something amazing and release it commercially, that's AWESOME! Let me know, I'd love to see it.
