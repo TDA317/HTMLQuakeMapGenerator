@@ -14,9 +14,27 @@ There is well over 40hrs of actual work with multiple false starts and ventures 
 This is an early, alpha release. The machine is stable, but it's not finished. Here's the deal:
 
 *   **It Makes Solid Maps!** The generator creates simple but architecturally sound levels that, with one major exception, seal properly and are ready to compile.
-*   **The SKY is the VOID!** The big caveat: The generator does not currently create skyboxes. Courtyard areas will have openings straight to the void. This is the top priority for the next major feature update. For now, you can either enjoy the brutalist, open-roof aesthetic or build your own skybox around the level in an editor to get it to properly VIZ.
+*   ~~**The SKY is the VOID!** The big caveat: The generator does not currently create skyboxes. Courtyard areas will have openings straight to the void. This is the top priority for the next major feature update. For now, you can either enjoy the brutalist, open-roof aesthetic or build your own skybox around the level in an editor to get it to properly VIZ.~~
 *   **Single Player Focused:** Light and entity placement is functional but very basic. ~~There are no `trigger_changelevel` entities to end a map and no deathmatch starts have been implemented, though adding them is trivial.~~
 *   **Lots of Knobs to Turn:** The GUI provides a ton of options for controlling the map's dimensions, room count, verticality, and entity population. Go wild.
+
+Issues:
+*   **Z-Fighting:** Textures overlap places. Occasionally you'll see a little bit of sky peaking through places it shouldn't because of this. I had worked on it for this version but rolled back due to some repeated issues. Will address again later
+*   **Lighting:** Lighting is place holder at best. Next thing to be addressed.
+*   **Entities:** Sometimes entities/spawn points will clip into walls or stairs. Its much improved but still not perfect.
+*   **Geometry:** Being that this is random, some impossible geometry and architecture is made. Large rooms next to a courtyard where you'd definitely see the large room's outside walls over the courtyard wall, etc. and sometimes impassible obstacles. If you go beyond the default vertical variation, the ability to go from room to room quickly falls apart. Can be helped by making the minimum ceiling heights larger too, but there are limits.
+
+## Alpha v1.064 notes:
+*   **Improved item and enemy placement**
+* The last version let a lot of room for improvement. Lots of things clipped in walls and floors. It is much improved but still not perfect.
+* Fish are ACTUALLY in the water. 
+* Check box in GUI to enable "major items on pedistals" places a brush under armor, power ups, and a few weapons as well as a light at the center of the object. Adds a bit of focus and specialness to these otherwise randomly placed items.
+*   **Skyboxes**
+* Not perfect, but skyboxes are actually implemented and working. At default settings, it will produce properly sealed maps.
+*   **Single player**
+* There is a proper functional end of map for single player. Points at start.bsp 
+* Randomly placed intermission camera. Supposed to pick one of the larger rooms and place it there. But, currently has no real focus of interest otherwise.
+
 
 ## Alpha v1.051 notes:
 *   **Improved item and enemy placement**
