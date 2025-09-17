@@ -1,0 +1,1418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TDA's Single File HTML Quake 1 Random Map Generator</title>
+
+<!--
+
+    ============================================================================
+    == TDA's Single File HTML Quake 1 Random Map Generator (v1.064)           ==
+    ============================================================================
+    == AUTHOR: TDA317                                                         ==
+    == AI COLLABORATION & REFACTOR: Google Gemini (Carmack/Romero persona)    ==
+    ==                                                                        ==
+    == VERSION NOTES (v1.064):                                                ==
+    == - TRIGGER_CHANGELEVEL FIXED: The exit trigger is now fully functional. ==
+    ==   Added the required "map" "start" property and created a separate     ==
+    ==   visual teleporter brush with the '*tele01' texture.                  ==
+    == - END-OF-LEVEL CAMERA: Implemented the 'info_intermission' entity.     ==
+    ==   The game now cuts to a dramatic, top-down camera shot of the largest ==
+    ==   courtyard or room upon level completion.                             ==
+    == - Skyboxes: The world is actually sealed now. No more view of the void ==
+    ==   Entities: More iprovements to entity placement and handling. Less    ==
+    ==   clipping into walls and stairs. (but not completely eliminated)      ==
+    ==   Hallways and liquids: Hallway sizes are weighted towards the 50%+    ==
+    ==   end of the min/max scale. Liquid can be 32-160 units deep.           ==
+    ==   Etc: Other minor tweaks                                              ==
+    ============================================================================
+
+-->
+
+<style>
+:root {
+  --bg:#0b0d10; --panel:#121318; --muted:#9fb3d9; --text:#dbe9ff; --accent:#7fb6ff;
+  --ok:#7ef7a2; --warn:#ffd2a; --danger:#ff7b7b;
+  --room:#c9ccd3; --court:#d9b26b; --corr:#9098a7;
+  --water:#3b82f6; --slime:#22c55e; --lava:#ef4444;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--text);font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;}
+header{padding:12px 16px;border-bottom:1px solid #151923;background:#0f1115}
+header h1{margin:0;font-size:16px}
+.container{display:grid;grid-template-columns:380px 1fr 220px;height:calc(100vh - 56px);gap:12px;padding:12px}
+.panel{padding:12px;background:#0f1216;border-radius:12px;border:1px solid #161b24;overflow:auto}
+.right-sidebar .group{margin-top:12px;}
+.group{margin-bottom:12px;padding:10px;border-radius:10px;background:#0c0f14;border:1px solid #12151b}
+.group h3{margin:0 0 8px;color:var(--muted);font-size:13px;text-transform:uppercase}
+.row{display:flex;align-items:center;gap:8px;margin:6px 0}
+.row label{flex:1;color:#cdd9f7;font-size:13px}
+input[type=number]{width:100px;padding:6px;border-radius:8px;background:#0a0b0f;border:1px solid #1e2430;color:var(--text)}
+input[type=checkbox],input[type=radio]{transform:translateY(2px)}
+input[type=range]{flex-grow:1}
+button{background:#16202f;color:var(--text);border:1px solid #243145;padding:8px 10px;border-radius:10px;cursor:pointer;font-family:inherit;}
+button.primary{background:#1b3553;font-weight:bold;}
+button:disabled{background:#111a25;color:#5a6b8c;cursor:not-allowed;}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.canvasWrap{display:flex; flex-direction:column; padding:0; position:relative;}
+canvas{display:block; width:100%; height:100%; border-radius:12px;background:#05060a;border:1px solid #151823}
+.legend{margin-top:12px; display:flex; flex-direction:column; gap:8px; padding:10px; border-radius:10px; background:#0c0f14; border:1px solid #12151b;}
+.legend-item{display:flex; align-items:center; color:#bcd4ff;font-size:13px;}
+.sw{width:14px;height:14px;border-radius:3px;display:inline-block;vertical-align:middle;margin-right:8px; flex-shrink:0;}
+.sw-room{background:var(--room)} .sw-court{background:var(--court)} .sw-corr{background:var(--corr)}
+.sw-water{background:var(--water)} .sw-slime{background:var(--slime)} .sw-lava{background:var(--lava)}
+.status{padding:8px;border-radius:8px;background:#0b1220;border:1px solid #121826;color:#cfe0ff;font-size:13px;white-space:pre-line; min-height:80px; align-content:flex-start;}
+.entity-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;}
+</style>
+</head>
+<body>
+<header><h1>TDA's Single File HTML Quake 1 Random Map Generator</h1></header>
+
+<div class="container">
+  <aside class="panel">
+    <div class="group">
+      <h3>Workflow</h3>
+      <div class="btns">
+        <button id="forgeBtn" class="primary">Forge World</button>
+        <button id="spawnEntitiesBtn">Spawn Entities</button>
+        <button id="downloadBtn">Download .map File</button>
+      </div>
+       <div class="row"><label>Layout Seed</label><input type="number" id="layoutSeed" value="0"></div>
+       <div class="row"><label>Entity Seed</label><input type="number" id="entitySeed" value="0"></div>
+       <div class="btns">
+         <button id="forgeFromSeedsBtn">Forge from Seeds</button>
+       </div>
+    </div>
+
+    <div class="group">
+        <h3>Game Mode</h3>
+        <div class="row">
+            <label><input type="checkbox" id="modeSP" checked> Single Player / Co-op</label>
+        </div>
+        <div class="row">
+            <label><input type="checkbox" id="modeDM" checked> Deathmatch</label>
+        </div>
+        <div id="dmOptions" class="row">
+            <label>DM Spawns</label>
+            <input type="number" id="dmSpawnCount" min="4" max="16" value="8">
+        </div>
+    </div>
+
+
+    <div class="group">
+      <h3>Layout & Dimensions</h3>
+      <div class="row"><label>Map Width (units)</label><input type="number" id="mapW" min="512" max="8192" step="128" value="4096"></div>
+      <div class="row"><label>Map Height (units)</label><input type="number" id="mapH" min="512" max="8192" step="128" value="4096"></div>
+      <div class="row"><label>Cell Size (units)</label><input type="number" id="cellSize" min="32" max="512" step="16" value="64"></div>
+      <div class="row"><label>Room Count</label><input type="number" id="roomCount" min="4" max="80" value="20"></div>
+      <div class="row"><label>Min Room Size (units)</label><input type="number" id="minRoom" min="64" max="1024" step="32" value="128"></div>
+      <div class="row"><label>Max Room Size (units)</label><input type="number" id="maxRoom" min="128" max="2048" step="32" value="720"></div>
+      <div class="row"><label>Min Hallway Width (units)</label><input type="number" id="hallWidthMin" min="32" max="512" step="32" value="64"></div>
+      <div class="row"><label>Max Hallway Width (units)</label><input type="number" id="hallWidthMax" min="32" max="512" step="32" value="256"></div>
+      <div class="row"><label>Vertical Variation (±u)</label><input type="number" id="vertVar" min="0" max="256" step="8" value="64"></div>
+    </div>
+
+    <div class="group">
+      <h3>Ceiling & Lighting</h3>
+      <div class="row"><label>Room Ceiling Min</label><input type="number" id="roomCeilMin" min="96" max="512" step="16" value="128"></div>
+      <div class="row"><label>Room Ceiling Max</label><input type="number" id="roomCeilMax" min="96" max="512" step="16" value="256"></div>
+      <div class="row"><label>Hall Ceiling Min</label><input type="number" id="hallCeilMin" min="64" max="256" step="16" value="128"></div>
+      <div class="row"><label>Hall Ceiling Max</label><input type="number" id="hallCeilMax" min="64" max="256" step="16" value="512"></div>
+      <div class="row"><label>Light Brightness</label><input type="number" id="lightBrightness" min="100" max="600" value="250"></div>
+      <div class="row"><label>Generate Ceiling Detail</label><input type="checkbox" id="generateSoffits" checked></div>
+    </div>
+
+    <div class="group">
+      <h3>Detailing & Liquids</h3>
+      <div class="row"><label>Courtyard Chance %</label><input type="number" id="courtChance" min="0" max="80" value="15"></div>
+      <div class="row"><label>Water Chance %</label><input type="number" id="waterPct" min="0" max="60" value="10"></div>
+      <div class="row"><label>Slime Chance %</label><input type="number" id="slimePct" min="0" max="60" value="5"></div>
+      <div class="row"><label>Lava Chance %</label><input type="number" id="lavaPct" min="0" max="40" value="2"></div>
+      <div class="row"><label>Major Item Pedestals</label><input type="checkbox" id="majorItemPedestals" checked></div>
+    </div>
+
+    <div class="group">
+        <h3>Monsters</h3>
+        <div class="entity-grid">
+            <div class="row"><label>Grunt</label><input type="number" id="monster_army" value="6"></div>
+            <div class="row"><label>Dog</label><input type="number" id="monster_dog" value="2"></div>
+            <div class="row"><label>Fish</label><input type="number" id="monster_fish" value="4"></div>
+            <div class="row"><label>Enforcer</label><input type="number" id="monster_enforcer" value="3"></div>
+            <div class="row"><label>Knight</label><input type="number" id="monster_knight" value="0"></div>
+            <div class="row"><label>Hell Knight</label><input type="number" id="monster_hell_knight" value="0"></div>
+            <div class="row"><label>Ogre</label><input type="number" id="monster_ogre" value="2"></div>
+            <div class="row"><label>Scrag</label><input type="number" id="monster_wizard" value="0"></div>
+            <div class="row"><label>Fiend</label><input type="number" id="monster_demon1" value="0"></div>
+            <div class="row"><label>Tarbaby</label><input type="number" id="monster_tarbaby" value="0"></div>
+            <div class="row"><label>Zombie</label><input type="number" id="monster_zombie" value="0"></div>
+            <div class="row"><label>Shambler</label><input type="number" id="monster_shambler" value="1"></div>
+            <div class="row"><label>Vore</label><input type="number" id="monster_shalrath" value="0"></div>
+        </div>
+    </div>
+    
+    <div class="group">
+        <h3>Weapons & Ammo</h3>
+        <div class="entity-grid">
+            <div class="row"><label>Shotgun</label><input type="number" id="weapon_shotgun" value="1"></div>
+            <div class="row"><label>S. Shotgun</label><input type="number" id="weapon_supershotgun" value="1"></div>
+            <div class="row"><label>Nailgun</label><input type="number" id="weapon_nailgun" value="1"></div>
+            <div class="row"><label>S. Nailgun</label><input type="number" id="weapon_supernailgun" value="1"></div>
+            <div class="row"><label>Grenade L.</label><input type="number" id="weapon_grenadelauncher" value="1"></div>
+            <div class="row"><label>Rocket L.</label><input type="number" id="weapon_rocketlauncher" value="1"></div>
+            <div class="row"><label>Shells</label><input type="number" id="item_shells" value="8"></div>
+            <div class="row"><label>Nails</label><input type="number" id="item_spikes" value="8"></div>
+            <div class="row"><label>Rockets</label><input type="number" id="item_rockets" value="4"></div>
+            <div class="row"><label>Cells</label><input type="number" id="item_cells" value="2"></div>
+        </div>
+    </div>
+
+    <div class="group">
+        <h3>Health, Armor & Powerups</h3>
+        <div class="entity-grid">
+            <div class="row"><label>Health</label><input type="number" id="item_health" value="10"></div>
+            <div class="row"><label>Green Armor</label><input type="number" id="item_armor1" value="2"></div>
+            <div class="row"><label>Yellow Armor</label><input type="number" id="item_armor2" value="1"></div>
+            <div class="row"><label>Red Armor</label><input type="number" id="item_armorInv" value="1"></div>
+            <div class="row"><label>Quad</label><input type="number" id="item_artifact_super_damage" value="1"></div>
+            <div class="row"><label>Pentagram</label><input type="number" id="item_artifact_invulnerability" value="1"></div>
+            <div class="row"><label>Ring</label><input type="number" id="item_artifact_invisibility" value="0"></div>
+            <div class="row"><label>Biosuit</label><input type="number" id="item_artifact_envirosuit" value="0"></div>
+        </div>
+    </div>
+
+  </aside>
+
+  <main class="canvasWrap panel">
+    <canvas id="canvas"></canvas>
+  </main>
+  
+  <aside class="panel right-sidebar">
+    <div id="status" class="status">Ready. Press "Forge World" to begin.</div>
+    <div class="legend">
+      <h3>Legend</h3>
+      <div class="legend-item"><i class="sw sw-room"></i><span>Room</span></div>
+      <div class="legend-item"><i class="sw sw-court"></i><span>Courtyard</span></div>
+      <div class="legend-item"><i class="sw sw-corr"></i><span>Corridor</span></div>
+      <div class="legend-item"><i class="sw sw-water"></i><span>Water</span></div>
+      <div class="legend-item"><i class="sw sw-slime"></i><span>Slime</span></div>
+      <div class="legend-item"><i class="sw sw-lava"></i><span>Lava</span></div>
+    </div>
+  </aside>
+
+</div>
+
+<script>
+'use strict';
+// --- UTILITY & SETUP ---
+const $id=id=>document.getElementById(id);
+const setStatus=msg=>$id('status').textContent=msg;
+const snap=(v,g)=>Math.round(v/g)*g;
+const randInt=(min,max,rand)=>Math.floor(rand()*(max-min+1))+min;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const setButtonsDisabled=d=>{$id('forgeBtn').disabled=d;$id('spawnEntitiesBtn').disabled=d;$id('downloadBtn').disabled=d;$id('forgeFromSeedsBtn').disabled=d;};
+function makeRNG(s){let t=s>>>0;return function(){t+=0x6D2B79F5;let r=Math.imul(t^(t>>>15),1|t);r^=r+Math.imul(r^(r>>>7),61|r);return((r^(r>>>14))>>>0)/4294967296;}}
+class PriorityQueue{constructor(c=(a,b)=>a<b){this._h=[];this._c=c}size(){return this._h.length}push(v){this._h.push(v);this._siftUp()}pop(){const p=this.peek();if(this.size()>1)this._swap(0,this.size()-1);this._h.pop();this._siftDown();return p}peek(){return this._h[0]}_swap(i,j){[this._h[i],this._h[j]]=[this._h[j],this._h[i]]}_compare(i,j){return this._c(this._h[i],this._h[j])}_parent(i){return Math.floor((i-1)/2)}_left(i){return 2*i+1}_right(i){return 2*i+2}_siftUp(){let n=this.size()-1;while(n>0&&this._compare(n,this._parent(n))){this._swap(n,this._parent(n));n=this._parent(n)}}_siftDown(){let n=0;while((this._left(n)<this.size()&&this._compare(this._left(n),n))||(this._right(n)<this.size()&&this._compare(this._right(n),n))){let m=(this._right(n)<this.size()&&this._compare(this._right(n),this._left(n)))?this._right(n):this._left(n);this._swap(n,m);n=m}}}
+
+// --- GLOBAL STATE & CONSTANTS ---
+let WORLD = null, ENTITIES = [];
+let PREVIEW_COLORS = {};
+const TILE_TYPES = {VOID:0, ROOM:1, CORR:2, COURT:3};
+const LIQUID_TYPES = {NONE:0, WATER:4, SLIME:5, LAVA:6};
+const PLAYER_MAX_STEP_HEIGHT=18, PLAYER_HEADROOM=64, STAIR_RISE=16, STAIR_RUN=32;
+const ENTITY_Z_OFFSETS = {
+    item_shells: 16, item_health: 16, item_spikes: 16, item_rockets: 16, item_cells: 16,
+    item_armor2: 16, item_armor1: 16, item_armorInv: 16, weapon_shotgun: 16, weapon_nailgun: 16,
+    weapon_rocketlauncher: 16, weapon_supernailgun: 16, weapon_grenadelauncher: 16, weapon_supershotgun: 16,
+    info_player_deathmatch: 48, info_player_start: 48, info_player_coop: 48, monster_enforcer: 32,
+    monster_army: 32, monster_dog: 32, monster_demon1: 32, monster_knight: 32, item_artifact_invisibility: 32,
+    item_artifact_invulnerability: 32, item_artifact_envirosuit: 32, item_artifact_super_damage: 32,
+    monster_shambler: 32, monster_zombie: 32, monster_ogre: 32, monster_ogre_marksman: 32,
+    monster_tarbaby: 32, monster_hell_knight: 32, monster_shalrath: 32,
+    monster_wizard: 64,
+};
+const BSP_MODEL_CLASSES = new Set(['item_shells', 'item_health', 'item_spikes', 'item_rockets', 'item_cells']);
+const MAJOR_ITEMS = new Set(['weapon_rocketlauncher', 'weapon_supernailgun', 'weapon_grenadelauncher', 'item_artifact_super_damage', 'item_artifact_invulnerability', 'item_armorInv']);
+
+// --- UI & CONFIG READING ---
+function readConfig(){
+    const cellSize = snap(clamp(Number($id('cellSize').value), 32, 512), 16);
+    const hallWidthMin = snap(clamp(Number($id('hallWidthMin').value), 32, 512), 16);
+    const hallWidthMax = snap(clamp(Number($id('hallWidthMax').value), 32, 512), 16);
+
+    const c = {
+        placeSP: $id('modeSP').checked,
+        placeDM: $id('modeDM').checked,
+        dmSpawnCount: Number($id('dmSpawnCount').value),
+        mapW: clamp(Number($id('mapW').value), 512, 8192), mapH: clamp(Number($id('mapH').value), 512, 8192), 
+        cellSize: cellSize, 
+        roomCount: clamp(Number($id('roomCount').value), 4, 80),
+        minRoom: Math.max(1, Math.round(clamp(Number($id('minRoom').value), 64, 1024) / cellSize)),
+        maxRoom: Math.max(2, Math.round(clamp(Number($id('maxRoom').value), 128, 2048) / cellSize)),
+        hallWidthMin: hallWidthMin,
+        hallWidthMax: Math.max(hallWidthMin, hallWidthMax),
+        vertVar: snap(clamp(Number($id('vertVar').value), 0, 256), 8), 
+        courtChance: clamp(Number($id('courtChance').value), 0, 80), 
+        waterPct: clamp(Number($id('waterPct').value), 0, 60), 
+        slimePct: clamp(Number($id('slimePct').value), 0, 60), 
+        lavaPct: clamp(Number($id('lavaPct').value), 0, 40), 
+        roomCeilMin: snap(clamp(Number($id('roomCeilMin').value), 96, 512), 16), 
+        roomCeilMax: snap(clamp(Number($id('roomCeilMax').value), 96, 512), 16), 
+        hallCeilMin: snap(clamp(Number($id('hallCeilMin').value), 64, 256), 16), 
+        hallCeilMax: snap(clamp(Number($id('hallCeilMax').value), 64, 256), 16), 
+        lightBrightness: clamp(Number($id('lightBrightness').value), 100, 600), 
+        generateSoffits: $id('generateSoffits').checked, 
+        majorItemPedestals: $id('majorItemPedestals').checked,
+        layoutSeed: Number($id('layoutSeed').value) || Date.now(), 
+        entitySeed: Number($id('entitySeed').value) || Date.now() + 1,
+    };
+    c.gridW = Math.floor(c.mapW / c.cellSize); 
+    c.gridH = Math.floor(c.mapH / c.cellSize); 
+    c.maxRoom = Math.max(c.minRoom, c.maxRoom); 
+    c.roomCeilMax = Math.max(c.roomCeilMin, c.roomCeilMax); 
+    c.hallCeilMax = Math.max(c.hallCeilMin, c.hallCeilMax); 
+    return c;
+}
+
+function readEntityConfig(){
+    const ids = ["monster_army","monster_dog","monster_fish","monster_enforcer","monster_knight","monster_hell_knight","monster_ogre","monster_wizard","monster_demon1","monster_tarbaby","monster_zombie","monster_shambler","monster_shalrath","weapon_shotgun","weapon_supershotgun","weapon_nailgun","weapon_supernailgun","weapon_grenadelauncher","weapon_rocketlauncher","item_shells","item_spikes","item_rockets","item_cells","item_health","item_armor1","item_armor2","item_armorInv","item_artifact_super_damage","item_artifact_invulnerability","item_artifact_invisibility","item_artifact_envirosuit"];
+    return ids.reduce((acc,id)=>(acc[id]=Number($id(id).value),acc),{});
+}
+
+// --- CORE GENERATION LOGIC ---
+
+function forgeWorld() {
+    ENTITIES = [];
+    const cfg = readConfig();
+
+    if (cfg.placeSP) {
+        const requiredCells = Math.ceil(256 / cfg.cellSize);
+        const margin = 3 + Math.ceil(128 / cfg.cellSize); 
+        const minWidth = (requiredCells * 2) + margin;
+        const minHeight = requiredCells + 2;
+        if (cfg.gridW < minWidth || cfg.gridH < minHeight) {
+            setStatus(`ERROR: Map dimensions too small for guaranteed 256x256 start/end rooms.\nRequires at least ${minWidth*cfg.cellSize}w x ${minHeight*cfg.cellSize}h with current Cell Size.`);
+            WORLD = null;
+            drawPreview();
+            return;
+        }
+    }
+
+    $id('layoutSeed').value = cfg.layoutSeed;
+    const rand = makeRNG(cfg.layoutSeed);
+    const W = cfg.gridW, H = cfg.gridH;
+    
+    const grid = Array.from({length:H},()=>Array(W).fill(TILE_TYPES.VOID));
+    const hallIdGrid = Array.from({length:H},()=>Array(W).fill(-1));
+    const halls = [];
+    const height = Array.from({length:H},()=>Array(W).fill(0));
+    const rooms = [];
+    const connections = new Map();
+
+    const placeRoom = (x, y, w, h) => {
+        x = Math.floor(x); y = Math.floor(y); w = Math.floor(w); h = Math.floor(h);
+        const newRoom = {x,y,w,h,id:rooms.length,centerX:x+Math.floor(w/2),centerY:y+Math.floor(h/2)};
+        if(x + w >= W || y + h >= H || x < 1 || y < 1) return null;
+        if(rooms.some(r => x < r.x + r.w && x + w > r.x && y < r.y + r.h && y + h > r.y)) return null;
+        
+        newRoom.type = (rand() * 100 < cfg.courtChance) ? TILE_TYPES.COURT : TILE_TYPES.ROOM;
+        newRoom.ceilHeight = randInt(cfg.roomCeilMin, cfg.roomCeilMax, rand);
+        rooms.push(newRoom);
+        connections.set(newRoom.id, new Set());
+        const roomHeight = snap((rand() * 2 - 1) * cfg.vertVar, 16);
+        for(let yy=y; yy < y + h; yy++) for(let xx=x; xx < x + w; xx++){
+            grid[yy][xx] = newRoom.type;
+            height[yy][xx] = roomHeight;
+        }
+        return newRoom;
+    };
+
+    if(cfg.placeSP) {
+        const requiredCells = Math.ceil(256 / cfg.cellSize);
+        const startEndDim = Math.max(cfg.minRoom, requiredCells);
+        
+        let startRoom = null; 
+        while(!startRoom){ 
+            const y = randInt(1, H - startEndDim - 2, rand); 
+            startRoom = placeRoom(1, y, startEndDim, startEndDim); 
+        }
+
+        let endRoom = null; 
+        while(!endRoom){ 
+            const y = randInt(1, H - startEndDim - 2, rand); 
+            const x = W - startEndDim - 2;
+            endRoom = placeRoom(x, y, startEndDim, startEndDim); 
+        }
+    }
+
+    for(let i=0; rooms.length < cfg.roomCount; i++){
+        if(i > cfg.roomCount * 20){ setStatus(`Struggling to place rooms, stopped at ${rooms.length}. Try different settings.`); break; }
+        const rw = randInt(cfg.minRoom,cfg.maxRoom,rand);
+        const rh = randInt(cfg.minRoom,cfg.maxRoom,rand);
+        
+        let minX = 1, maxX = W-rw-2;
+        if (cfg.placeSP) {
+            const startRoom = rooms[0];
+            const endRoom = rooms[1];
+            minX = startRoom.x + startRoom.w + 1;
+            maxX = endRoom.x - rw - 1;
+        }
+
+        if (minX >= maxX) {
+            setStatus(`Not enough space between Start/End rooms to place all requested rooms. Placed ${rooms.length}.`);
+            break; 
+        }
+        
+        const x = randInt(minX, maxX, rand);
+        const y = randInt(1, H - rh - 2, rand);
+        placeRoom(x, y, rw, rh);
+    }
+    if(rooms.length < 2){ setStatus("Error: Not enough rooms placed."); return; }
+
+    const connected = new Set([0]);
+    const pq = new PriorityQueue((a,b)=>a.dist < b.dist);
+    let currentRoom = rooms[0];
+    while(connected.size < rooms.length){
+        for(const other of rooms) if(!connected.has(other.id)) pq.push({from:currentRoom,to:other,dist:Math.hypot(currentRoom.centerX-other.centerX,currentRoom.centerY-other.centerY)});
+        let next;
+        do { next=pq.pop(); } while(next && connected.has(next.to.id));
+        if(next){
+            const minW = Math.round(cfg.hallWidthMin / cfg.cellSize);
+            const maxW = Math.round(cfg.hallWidthMax / cfg.cellSize);
+            const normalizedRand = Math.max(rand(), rand());
+            const hallGridWidth = minW + Math.floor(normalizedRand * (maxW - minW + 1));
+            
+            const hallId = halls.length;
+            halls.push({ id: hallId, ceilingHeight: randInt(cfg.hallCeilMin, cfg.hallCeilMax, rand) });
+            carveCorridorOnGrid(next.from.centerX, next.from.centerY, next.to.centerX, next.to.centerY, hallGridWidth, grid, height, hallIdGrid, hallId);
+            
+            connections.get(next.from.id).add(next.to.id);
+            connections.get(next.to.id).add(next.from.id);
+            currentRoom = next.to;
+            connected.add(currentRoom.id);
+        } else break;
+    }
+    
+    unifyIslands(rooms, connections, grid, height, hallIdGrid, halls, cfg, rand);
+
+    const startRoomId = (cfg.placeSP && rooms.length > 0) ? rooms[0].id : null;
+    let endRoomId = (cfg.placeSP && rooms.length > 1) ? rooms[1].id : null;
+    let altarCell = null;
+
+    if (cfg.placeSP && endRoomId !== null) {
+        const endRoom = rooms.find(r => r.id === endRoomId);
+        if (endRoom) {
+            altarCell = { x: endRoom.x + endRoom.w - 1, y: endRoom.centerY };
+        }
+    }
+    
+    const liquid = Array.from({length:H},()=>Array(W).fill(LIQUID_TYPES.NONE));
+    rooms.forEach(r=>{
+        if (r.id === startRoomId) return; 
+        if(r.w * cfg.cellSize < 128 || r.h * cfg.cellSize < 128) return;
+        const p=rand()*100;
+        let lType = LIQUID_TYPES.NONE;
+        if(p<cfg.lavaPct) lType=LIQUID_TYPES.LAVA;
+        else if(p<cfg.lavaPct+cfg.slimePct) lType=LIQUID_TYPES.SLIME;
+        else if(p<cfg.lavaPct+cfg.slimePct+cfg.waterPct) lType=LIQUID_TYPES.WATER;
+        if(lType!==LIQUID_TYPES.NONE){
+            const pX=r.x+1, pY=r.y+1, pW=r.w-2, pH=r.h-2;
+            const bH=height[r.centerY][r.centerX];
+            const lD=snap(randInt(32,96,rand),16);
+            for(let yy=pY; yy < pY + pH; yy++) for(let xx=pX; xx < pX+pW; xx++){
+                liquid[yy][xx]=lType;
+                height[yy][xx]={surface:bH-8,bottom:bH-8-lD};
+            }
+        }
+    });
+
+    WORLD = {cfg, W, H, grid, height, rooms, liquid, connections, startRoomId, endRoomId, rand, stairZones:[], altarCell, detailBrushes:[], hallIdGrid, halls};
+    calculateStairZones();
+    setStatus(`Forged world with ${rooms.length} rooms. Seed: ${cfg.layoutSeed}. Ready to spawn entities.`);
+    drawPreview();
+}
+
+function carveCorridorOnGrid(x1, y1, x2, y2, width, grid, height, hallIdGrid, hallId) {
+    x1 = Math.floor(x1); y1 = Math.floor(y1); x2 = Math.floor(x2); y2 = Math.floor(y2);
+    const startHeight = typeof height[y1][x1] === 'object' ? height[y1][x1].surface : height[y1][x1];
+    const endHeight = typeof height[y2][x2] === 'object' ? height[y2][x2].surface : height[y2][x2];
+    const avgHeight = snap((startHeight + endHeight) / 2, 16);
+
+    let cx = x1, cy = y1;
+    const dx = Math.sign(x2 - x1), dy = Math.sign(y2 - y1);
+
+    const carve = (x, y) => {
+        const half = Math.floor(width / 2);
+        for (let i = -half; i <= half; i++) {
+            for (let j = -half; j <= half; j++) {
+                const nx = x + i, ny = y + j;
+                if (nx > 0 && nx < grid[0].length - 1 && ny > 0 && ny < grid.length - 1 && grid[ny][nx] === TILE_TYPES.VOID) {
+                    grid[ny][nx] = TILE_TYPES.CORR;
+                    height[ny][nx] = avgHeight;
+                    hallIdGrid[ny][nx] = hallId;
+                }
+            }
+        }
+    };
+
+    while (cx !== x2) { carve(cx, cy); cx += dx; }
+    while (cy !== y2) { carve(cx, cy); cy += dy; }
+    carve(x2, y2);
+}
+
+
+function unifyIslands(rooms, connections, grid, height, hallIdGrid, halls, cfg, rand){
+    const findIslands = () => {
+        const islands = [];
+        const visited = new Set();
+        for(const room of rooms){
+            if(visited.has(room.id)) continue;
+            const island = [];
+            const q = [room.id];
+            visited.add(room.id);
+            while(q.length > 0){
+                const currentId = q.shift();
+                island.push(currentId);
+                connections.get(currentId)?.forEach(neighborId => {
+                    if(!visited.has(neighborId)){ visited.add(neighborId); q.push(neighborId); }
+                });
+            }
+            islands.push(island);
+        }
+        return islands.sort((a, b) => b.length - a.length);
+    }
+    
+    let islands = findIslands();
+    while(islands.length > 1){
+        const mainIslandIds = new Set(islands[0]);
+        const otherIslandIds = islands[1];
+        
+        let bestPair = {dist: Infinity};
+        for(const mainId of mainIslandIds){
+            for(const otherId of otherIslandIds){
+                const roomA = rooms.find(r=>r.id===mainId);
+                const roomB = rooms.find(r=>r.id===otherId);
+                const dist = Math.hypot(roomA.centerX - roomB.centerX, roomA.centerY - roomB.centerY);
+                if(dist < bestPair.dist) bestPair = {roomA, roomB, dist};
+            }
+        }
+        
+        if(bestPair.roomA){
+            const {roomA, roomB} = bestPair;
+            const minW = Math.round(cfg.hallWidthMin / cfg.cellSize);
+            const maxW = Math.round(cfg.hallWidthMax / cfg.cellSize);
+            const normalizedRand = Math.max(rand(), rand());
+            const hallGridWidth = minW + Math.floor(normalizedRand * (maxW - minW + 1));
+
+            const hallId = halls.length;
+            halls.push({ id: hallId, ceilingHeight: randInt(cfg.hallCeilMin, cfg.hallCeilMax, rand) });
+            carveCorridorOnGrid(roomA.centerX, roomA.centerY, roomB.centerX, roomB.centerY, hallGridWidth, grid, height, hallIdGrid, hallId);
+            connections.get(roomA.id).add(roomB.id);
+            connections.get(roomB.id).add(roomA.id);
+        }
+        islands = findIslands();
+    }
+}
+
+
+// --- ENTITY PLACEMENT ---
+function spawnEntities(){
+    if(!WORLD){ setStatus("Forge a world layout first."); return; }
+    const cfg = readConfig();
+    $id('entitySeed').value = cfg.entitySeed;
+    const rand = makeRNG(cfg.entitySeed);
+    ENTITIES = [];
+    WORLD.detailBrushes = [];
+    
+    classifySpots();
+
+    if(cfg.placeSP) placeSPEntities(rand);
+    if(cfg.placeDM) placeDMSpawns(rand);
+    
+    const entityCfg = readEntityConfig();
+    const entityList = [];
+    for(const [cn, count] of Object.entries(entityCfg)){
+        if(count <= 0) continue;
+        const def = {cn};
+        if(cn.startsWith('monster_')) {
+            def.type = cn === 'monster_fish' ? 'FishMonster' : ['monster_shambler','monster_ogre'].includes(cn) ? 'LargeMonster' : 'StandardMonster';
+            def.placement = 'open';
+        } else if(cn.startsWith('weapon_')) {
+            def.type = 'Weapon';
+            def.placement = 'open';
+        } else if(cn.startsWith('item_shells')||cn.startsWith('item_spikes')||cn.startsWith('item_rockets')||cn.startsWith('item_cells')||cn.startsWith('item_health')){
+            def.type = 'BSPItem';
+            def.placement = 'corner';
+        } else if(cn.startsWith('item_armor')){
+            def.type = 'HealthArmor';
+            def.placement = 'wall';
+        } else if(cn.startsWith('item_artifact_')){
+            def.type = 'Powerup';
+            def.placement = 'open';
+        }
+        for(let i = 0; i < count; i++) entityList.push(def);
+    }
+
+    entityList.forEach(def => {
+        let spot_list;
+        switch(def.placement) {
+            case 'wall':   spot_list = WORLD.spots.standard_wall; break;
+            case 'corner': spot_list = WORLD.spots.standard_corner; break;
+            default:       spot_list = WORLD.spots.standard_open; break;
+        }
+
+        if(def.type === 'LargeMonster') {
+            spot_list = WORLD.spots.large_monster_spots.length > 0 ? WORLD.spots.large_monster_spots : WORLD.spots.wide_open_tall;
+        }
+        
+        if (def.type.includes('Monster')) {
+            spot_list = spot_list.filter(s => !s.isStartRoom);
+            if (def.type === 'FishMonster') {
+                spot_list = WORLD.spots.water.filter(s => !s.isStartRoom);
+            } else {
+                spot_list = spot_list.filter(s => !s.isWater);
+            }
+        }
+        
+        if(!spot_list || spot_list.length === 0){
+             if(def.type === 'FishMonster') return;
+             if(def.type === 'LargeMonster') spot_list = WORLD.spots.tall_rooms.filter(s => !s.isStartRoom && !s.adj.n && !s.adj.s && !s.adj.w && !s.adj.e);
+             else spot_list = WORLD.spots.standard_open.filter(s => !s.isStartRoom);
+        }
+        
+        const spot = getSpot(spot_list, rand, def.cn);
+        if(!spot) return;
+
+        const e = createEntity(def.cn, spot, rand);
+        ENTITIES.push(e);
+    });
+    
+    WORLD.rooms.forEach(r => {
+        if(r.type === TILE_TYPES.COURT) return;
+        const h = WORLD.height[r.centerY][r.centerX];
+        const fz = typeof h === 'object' ? h.surface : h;
+        ENTITIES.push({classname:'light', x:(r.centerX+0.5)*WORLD.cfg.cellSize, y:(r.centerY+0.5)*WORLD.cfg.cellSize, z:fz+r.ceilHeight-24, light:WORLD.cfg.lightBrightness});
+    });
+
+    setStatus(`Spawned entities with seed: ${cfg.entitySeed}.`);
+    drawPreview();
+}
+
+function classifySpots() {
+    const {W, H, grid, height, liquid, rooms, cfg, altarCell, startRoomId, stairZones} = WORLD;
+    const spots = { water: [], standard_open: [], standard_wall: [], standard_corner: [], large_rooms: [], tall_rooms: [], wide_open_tall: [], large_monster_spots: []};
+    
+    const allSpots = [];
+    for(let y=1; y<H-1; y++) for(let x=1; x<W-1; x++){
+        if (altarCell && x === altarCell.x && y === altarCell.y) continue;
+        if(grid[y][x] === TILE_TYPES.VOID) continue;
+
+        const spot = {x, y, isLiquid: liquid[y][x] !== LIQUID_TYPES.NONE, isWater: liquid[y][x] === LIQUID_TYPES.WATER};
+        
+        spot.room = rooms.find(rm => x>=rm.x && x<rm.x+rm.w && y>=rm.y && y<rm.y+rm.h);
+        spot.isStartRoom = spot.room ? spot.room.id === startRoomId : false;
+
+        const h = height[y][x];
+        spot.floorZ = spot.isLiquid ? h.surface : h;
+        spot.adj = {n:grid[y-1][x]===TILE_TYPES.VOID, s:grid[y+1][x]===TILE_TYPES.VOID, w:grid[y][x-1]===TILE_TYPES.VOID, e:grid[y][x+1]===TILE_TYPES.VOID};
+        
+        allSpots.push(spot);
+        if(spot.isWater){
+            spots.water.push(spot);
+        } else {
+            if(spot.room) { 
+                if(spot.room.w * cfg.cellSize >= 256 && spot.room.h * cfg.cellSize >= 256) spots.large_rooms.push(spot);
+                if(spot.room.ceilHeight >= 192) spots.tall_rooms.push(spot);
+            }
+
+            const wall_count = (spot.adj.n?1:0)+(spot.adj.s?1:0)+(spot.adj.w?1:0)+(spot.adj.e?1:0);
+            if(wall_count >= 2) spots.standard_corner.push(spot);
+            else if(wall_count === 1) spots.standard_wall.push(spot);
+            else spots.standard_open.push(spot);
+        }
+    }
+    
+    spots.standard_open.forEach(spot => {
+        if (!spot.adj.n && !spot.adj.s && !spot.adj.w && !spot.adj.e) {
+            if (spots.tall_rooms.some(s => s.x === spot.x && s.y === spot.y)) {
+                 spots.wide_open_tall.push(spot);
+            }
+        }
+    });
+
+    for (const spot of spots.wide_open_tall) {
+        let isClear = true;
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                if (grid[spot.y + dy]?.[spot.x + dx] === TILE_TYPES.VOID) {
+                    isClear = false;
+                    break;
+                }
+            }
+            if (!isClear) break;
+        }
+        if (isClear) {
+            spots.large_monster_spots.push(spot);
+        }
+    }
+
+    const stairCells = new Set();
+    stairZones.forEach(zone => {
+        const startX = Math.floor(zone.x1 / cfg.cellSize);
+        const endX = Math.ceil(zone.x2 / cfg.cellSize);
+        const startY = Math.floor(zone.y1 / cfg.cellSize);
+        const endY = Math.ceil(zone.y2 / cfg.cellSize);
+        for (let y = startY; y < endY; y++) {
+            for (let x = startX; x < endX; x++) {
+                stairCells.add(`${x},${y}`);
+            }
+        }
+    });
+
+    allSpots.forEach(spot => {
+        spot.isNearStairs = false;
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                if (stairCells.has(`${spot.x+dx},${spot.y+dy}`)) {
+                    spot.isNearStairs = true;
+                    return;
+                }
+            }
+        }
+    });
+    
+    WORLD.spots = spots;
+}
+
+function placeSPEntities(rand){
+    const allStartRoomSpots = [ ...WORLD.spots.standard_open, ...WORLD.spots.standard_wall, ...WORLD.spots.standard_corner ].filter(s => s.isStartRoom && !s.isWater);
+    if (allStartRoomSpots.length === 0) return;
+    
+    const openStartSpots = allStartRoomSpots.filter(s => !s.adj.n && !s.adj.s && !s.adj.w && !s.adj.e);
+    const centerSpot = getSpot(openStartSpots.length > 0 ? openStartSpots : allStartRoomSpots, rand, 'info_player_start');
+
+    if(!centerSpot) return;
+    
+    ENTITIES.push(createEntity('info_player_start', centerSpot, rand));
+    
+    let placedCoops = 0;
+    const {x, y} = centerSpot;
+    
+    for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            if (placedCoops >= 3) break;
+
+            const coopSpot = allStartRoomSpots.find(s => s.x === x + dx && s.y === y + dy);
+            if (coopSpot) {
+                 const cx = (coopSpot.x+0.5)*WORLD.cfg.cellSize, cy = (coopSpot.y+0.5)*WORLD.cfg.cellSize;
+                 if (!ENTITIES.some(e => Math.hypot(cx - e.x, cy - e.y) < 48)) {
+                     const validSpot = getSpot([coopSpot], rand, 'info_player_coop');
+                     if(validSpot) {
+                        ENTITIES.push(createEntity('info_player_coop', validSpot, rand));
+                        placedCoops++;
+                     }
+                 }
+            }
+        }
+        if (placedCoops >= 3) break;
+    }
+}
+
+function placeDMSpawns(rand){
+    const count = WORLD.cfg.dmSpawnCount;
+    let spots = [...WORLD.spots.standard_open, ...WORLD.spots.standard_wall].filter(s => !s.isWater);
+    if(spots.length === 0) return;
+    let spawns=[];
+    let p = getSpot(spots, rand, 'info_player_deathmatch');
+    if(!p) return;
+    spawns.push(p);
+    spots = spots.filter(s => s !== p);
+
+    while(spawns.length < count && spots.length > 0){
+        let best_p = null;
+        let max_min_dist = -1;
+        for(const candidate of spots){
+            let min_dist_to_spawn = Infinity;
+            for(const s of spawns){ const d = Math.hypot(s.x-candidate.x,s.y-candidate.y); if(d<min_dist_to_spawn) min_dist_to_spawn=d; }
+            if(min_dist_to_spawn > max_min_dist){ max_min_dist = min_dist_to_spawn; best_p = candidate; }
+        }
+        const foundSpot = getSpot([best_p], rand, 'info_player_deathmatch');
+        if (foundSpot) {
+            spawns.push(foundSpot);
+        }
+        spots = spots.filter(s => s !== best_p);
+    }
+    spawns.forEach(s => ENTITIES.push(createEntity('info_player_deathmatch',s,rand)));
+}
+
+function createEntity(cn, spot, rand) {
+    const isMajorItem = MAJOR_ITEMS.has(cn);
+    const { cellSize } = WORLD.cfg;
+    const itemHalfWidth = 16;
+    const aestheticGap = 8;
+    const wallNudge = itemHalfWidth + aestheticGap; // 24 units
+
+    let targetCenterX = (spot.x + 0.5) * cellSize;
+    let targetCenterY = (spot.y + 0.5) * cellSize;
+
+    if (spot.adj.n) { targetCenterY = (spot.y * cellSize + 16) + wallNudge; }
+    if (spot.adj.s) { targetCenterY = ((spot.y + 1) * cellSize - 16) - wallNudge; }
+    if (spot.adj.w) { targetCenterX = (spot.x * cellSize + 16) + wallNudge; }
+    if (spot.adj.e) { targetCenterX = ((spot.x + 1) * cellSize - 16) - wallNudge; }
+
+    let finalX = targetCenterX;
+    let finalY = targetCenterY;
+
+    if (BSP_MODEL_CLASSES.has(cn)) {
+        finalX -= 16;
+        finalY -= 16;
+    }
+    
+    let z = spot.floorZ + (ENTITY_Z_OFFSETS[cn] || 32);
+
+    if (cn === 'monster_fish') {
+        const h_info = WORLD.height[spot.y][spot.x];
+        z = spot.floorZ - 16; // Place origin below surface
+        if (h_info && h_info.bottom) {
+             z = Math.max(z, h_info.bottom + 16); // Don't clip through floor
+        }
+    }
+
+    if (WORLD.cfg.majorItemPedestals && isMajorItem) {
+        const pedestal_z = spot.floorZ;
+        z = pedestal_z + 16 + (ENTITY_Z_OFFSETS[cn] || 32);
+        
+        const pedestalBrush = {
+            x1: targetCenterX - 24, y1: targetCenterY - 24, z1: pedestal_z,
+            x2: targetCenterX + 24, y2: targetCenterY + 24, z2: pedestal_z + 16
+        };
+        WORLD.detailBrushes.push({ brush: pedestalBrush, texName: 'detail' });
+        ENTITIES.push({ classname: 'light', x: targetCenterX, y: targetCenterY, z: z + 16, light: 150 });
+    }
+
+    const entity = { classname: cn, x: finalX, y: finalY, z, _spot: spot };
+    if (!BSP_MODEL_CLASSES.has(cn)) {
+        entity.angle = randInt(0, 7, rand) * 45;
+    }
+    return entity;
+};
+
+function getSpot(list, rand, classname){
+    const BBOX_SIZES = { item_: 32, weapon_: 32, monster_army: 32, monster_dog: 32, monster_enforcer: 32, monster_ogre: 64, monster_shambler: 64, default: 32 };
+    const key = Object.keys(BBOX_SIZES).find(k => classname.startsWith(k)) || 'default';
+    const entHalfWidth = BBOX_SIZES[key] / 2;
+
+    if(!list || list.length === 0) return null;
+    let attempts = list.length + 20;
+    while(attempts-- > 0){
+        const spot = list[randInt(0, list.length - 1, rand)];
+        if(!spot) continue;
+        
+        if (spot.isNearStairs) continue;
+        
+        const x = (spot.x + 0.5) * WORLD.cfg.cellSize;
+        const y = (spot.y + 0.5) * WORLD.cfg.cellSize;
+
+        if(ENTITIES.some(e => Math.hypot(x - e.x, y - e.y) < 64)) continue;
+        
+        const isMonster = classname.startsWith('monster_');
+        const isFish = classname === 'monster_fish';
+        if (isMonster && !isFish) {
+            const minGX = Math.floor((x - entHalfWidth) / WORLD.cfg.cellSize);
+            const maxGX = Math.floor((x + entHalfWidth) / WORLD.cfg.cellSize);
+            const minGY = Math.floor((y - entHalfWidth) / WORLD.cfg.cellSize);
+            const maxGY = Math.floor((y + entHalfWidth) / WORLD.cfg.cellSize);
+            let overhangsLiquid = false;
+            for (let gx = minGX; gx <= maxGX; gx++) {
+                for (let gy = minGY; gy <= maxGY; gy++) {
+                    if (WORLD.liquid[gy]?.[gx] !== LIQUID_TYPES.NONE) {
+                        overhangsLiquid = true;
+                        break;
+                    }
+                }
+                if (overhangsLiquid) break;
+            }
+            if (overhangsLiquid) continue;
+        }
+
+        return spot;
+    }
+    return null;
+}
+
+
+// --- MAP EXPORT ---
+function getCellInfo(x, y) {
+    if (!WORLD) return null;
+    const {W, H, cfg, grid, height, rooms, hallIdGrid, halls} = WORLD;
+    if(x<0 || x>=W || y<0 || y>=H) return {tile:TILE_TYPES.VOID, x, y};
+    const t = grid[y][x];
+    if(t === TILE_TYPES.VOID) return {tile:t, x, y};
+    
+    const h = height[y][x];
+    const i = typeof h === 'object';
+    const f = i ? h.bottom : h;
+    
+    let cH = 0;
+    let r = null;
+    if (t === TILE_TYPES.CORR) {
+        const hallId = hallIdGrid[y][x];
+        cH = hallId !== -1 ? halls[hallId].ceilingHeight : cfg.hallCeilMin;
+    } else {
+        r = rooms.find(rm => x >= rm.x && x < rm.x + rm.w && y >= rm.y && y < rm.y + rm.h);
+        cH = r ? r.ceilHeight : cfg.roomCeilMin;
+    }
+    const c = f + cH;
+    
+    return {x, y, tile: t, isLiquid: i, h_info: h, floorZ: f, ceilZ: c, room: r};
+};
+
+function calculateStairZones() {
+    if(!WORLD) return;
+    const { W, H, cfg } = WORLD;
+    WORLD.stairZones = [];
+
+    for(let y=0; y<H; y++) for(let x=0; x<W; x++){
+        const cA = getCellInfo(x,y);
+        if(!cA || cA.tile === TILE_TYPES.VOID) continue;
+        [{dx:0,dy:1},{dx:1,dy:0}].forEach(({dx,dy}) => {
+             if (x+dx >= W || y+dy >= H) return;
+            const cB = getCellInfo(x+dx, y+dy);
+            if(!cB || cB.tile === TILE_TYPES.VOID) return;
+            
+            const f_d = cA.floorZ - cB.floorZ;
+            if(Math.abs(f_d) > PLAYER_MAX_STEP_HEIGHT && !cA.isLiquid && !cB.isLiquid){
+                const highCell = f_d > 0 ? cA : cB;
+                const lowCell = f_d > 0 ? cB : cA;
+                
+                const zone = {
+                    x1: lowCell.x * cfg.cellSize, y1: lowCell.y * cfg.cellSize, z1: lowCell.floorZ,
+                    x2: (highCell.x + 1) * cfg.cellSize, y2: (highCell.y+1) * cfg.cellSize, z2: highCell.floorZ
+                };
+                if (dx === 0) { zone.x2 = (lowCell.x + 1) * cfg.cellSize; }
+                if (dy === 0) { zone.y2 = (lowCell.y + 1) * cfg.cellSize; }
+                WORLD.stairZones.push(zone);
+            }
+        });
+    }
+}
+
+function exportGeometryToMap(callback){
+    const {W, H, cfg, grid, liquid } = WORLD;
+    const {cellSize, generateSoffits} = cfg;
+    const out = [];
+    const textures = {
+        indoor:  { wall: getDefaultTextures('128_blue_2'), floor: getDefaultTextures('128_blue_1'), ceil: getDefaultTextures('128_blue_3'), stair:getDefaultTextures('64_cyan_1')},
+        outdoor: { wall: getDefaultTextures('128_brown_1'), floor: getDefaultTextures('128_brown_2'), trim: getDefaultTextures('128_brown_3'), stair:getDefaultTextures('64_cyan_2')},
+        soffit:  getDefaultTextures('128_honey_1'),
+        liquid:  { water: getDefaultTextures('*64_water1_2'), slime: getDefaultTextures('*64_water2_2'), lava: getDefaultTextures('*64_lava_1') },
+        sky:     getDefaultTextures('SKY1'),
+        teleporter: getDefaultTextures('*tele01'),
+        trigger: getDefaultTextures('TRIGGER')
+    };
+    const riserTransitions=[];
+    for(let y=0; y<H; y++) for(let x=0; x<W; x++){
+        const cA = getCellInfo(x,y);
+        if(!cA || cA.tile === TILE_TYPES.VOID) continue;
+        const x1=x*cellSize,y1=y*cellSize,x2=x1+cellSize,y2=y1+cellSize;
+        const floorTex = cA.tile === TILE_TYPES.COURT ? textures.outdoor.floor : textures.indoor.floor;
+        pushBrush(out,{x1,y1,z1:cA.floorZ-16,x2,y2,z2:cA.floorZ},floorTex);
+        const isOpenAir = cA.tile === TILE_TYPES.COURT || cA.isLiquid;
+        if(!isOpenAir) {
+            pushBrush(out,{x1,y1,z1:cA.ceilZ,x2,y2,z2:cA.ceilZ+16},textures.indoor.ceil);
+        }
+        [{dx:0,dy:1,dir:'s'},{dx:1,dy:0,dir:'e'},{dx:0,dy:-1,dir:'n'},{dx:-1,dy:0,dir:'w'}].forEach(({dx,dy,dir})=>{
+            const cB=getCellInfo(x+dx,y+dy);
+            if(!cB) return;
+            const cA_isOpen = cA.tile === TILE_TYPES.COURT || cA.isLiquid;
+            
+            if(cB.tile === TILE_TYPES.VOID){
+                let z1 = cA.floorZ - 16;
+                let z2 = cA_isOpen ? (cA.isLiquid ? cA.h_info.surface : cA.floorZ + 128) : cA.ceilZ + 16;
+                const wallTex = cA.tile === TILE_TYPES.COURT ? textures.outdoor.wall : textures.indoor.wall;
+                let wx1, wy1, wx2, wy2;
+
+                if (dir === 's') {
+                    wx1 = x * cellSize; wy1 = (y + 1) * cellSize;
+                    wx2 = (x + 1) * cellSize; wy2 = wy1 + 16;
+                } else if (dir === 'n') {
+                    wx1 = x * cellSize; wy1 = y * cellSize - 16;
+                    wx2 = (x + 1) * cellSize; wy2 = y * cellSize;
+                } else if (dir === 'e') {
+                    wx1 = (x + 1) * cellSize; wy1 = y * cellSize;
+                    wx2 = wx1 + 16; wy2 = (y + 1) * cellSize;
+                } else {
+                    wx1 = x * cellSize - 16; wy1 = y * cellSize;
+                    wx2 = x * cellSize; wy2 = (y + 1) * cellSize;
+                }
+
+                pushBrush(out, { x1: wx1, y1: wy1, z1, x2: wx2, y2: wy2, z2 }, wallTex);
+                if (cA.tile === TILE_TYPES.COURT) {
+                    pushBrush(out, { x1: wx1, y1: wy1, z1: z2, x2: wx2, y2: wy2, z2: z2 + 16 }, textures.outdoor.trim);
+                }
+                return;
+            }
+
+            if(y*W+x > (y+dy)*W+(x+dx)) return;
+            const isOutdoorTransition = cA_isOpen !== (cB.tile === TILE_TYPES.COURT || cB.isLiquid);
+            const f_d=cA.floorZ-cB.floorZ;
+            const isLiquidBoundary = cA.isLiquid !== cB.isLiquid;
+            if(Math.abs(f_d)>0.1 || isLiquidBoundary){
+                let wx1,wy1,wx2,wy2;
+                if(dir==='s' || dir === 'n'){ wx1=x1;wy1=y2-16;wx2=x2;wy2=y2;}
+                else { wx1=x2-16;wy1=y1;wx2=x2;wy2=y2; }
+                const riserBrush={x1:wx1,y1:wy1,z1:Math.min(cA.floorZ,cB.floorZ),x2:wx2,y2:wy2,z2:Math.max(cA.floorZ,cB.floorZ)};
+                riserTransitions.push({brush:riserBrush,cellA:cA,cellB:cB,dir:dir,isOutdoor:isOutdoorTransition});
+            }
+            const getEffectiveCeil = (cell) => {
+                if(cell.isLiquid) return cell.h_info.surface;
+                if(cell.tile === TILE_TYPES.COURT) return cell.floorZ + 128;
+                return cell.ceilZ;
+            }
+            const cA_z = getEffectiveCeil(cA);
+            const cB_z = getEffectiveCeil(cB);
+            if(Math.abs(cA_z-cB_z)>0.1 && !cA_isOpen && !cB.isLiquid && cB.tile !== TILE_TYPES.COURT){
+                 if(generateSoffits){
+                    let wx1,wy1,wx2,wy2;
+                    if(dir==='s' || dir === 'n'){wx1=x1;wy1=y2-16;wx2=x2;wy2=y2;}
+                    else {wx1=x2-16;wy1=y1;wx2=x2;wy2=y2;}
+                    let highCell, lowCell;
+                    if (cA.floorZ > cB.floorZ) { highCell = cA; lowCell = cB; } else { highCell = cB; lowCell = cA; }
+                    const clearance = lowCell.ceilZ - highCell.floorZ;
+                    let soffit_z1 = Math.min(cA_z, cB_z);
+                    const soffit_z2 = Math.max(cA_z, cB_z);
+                    if (clearance < PLAYER_HEADROOM) {
+                        soffit_z1 = highCell.floorZ + PLAYER_HEADROOM;
+                    }
+                    if (soffit_z1 < soffit_z2) {
+                        pushBrush(out, { x1: wx1, y1: wy1, z1: soffit_z1, x2: wx2, y2: wy2, z2: soffit_z2 }, textures.soffit);
+                    }
+                }
+            }
+        });
+    }
+
+    for (let y = 1; y < H; y++) {
+        for (let x = 1; x < W; x++) {
+            const cells = [
+                { cell: getCellInfo(x - 1, y - 1), corner: 'br' },
+                { cell: getCellInfo(x,     y - 1), corner: 'bl' },
+                { cell: getCellInfo(x - 1, y),     corner: 'tr' },
+                { cell: getCellInfo(x,     y),     corner: 'tl' }
+            ];
+
+            const solidCells = cells.filter(c => c.cell.tile !== TILE_TYPES.VOID);
+
+            if (solidCells.length === 1) {
+                const solid = solidCells[0];
+                const cA = solid.cell;
+                const wallZ1 = cA.floorZ - 16;
+                const wallZ2 = (cA.tile === TILE_TYPES.COURT || cA.isLiquid) ? (cA.isLiquid ? cA.h_info.surface : cA.floorZ + 128) : cA.ceilZ + 16;
+                const wallTex = cA.tile === TILE_TYPES.COURT ? textures.outdoor.wall : textures.indoor.wall;
+
+                let plugX = x * cellSize;
+                let plugY = y * cellSize;
+                
+                if (solid.corner === 'bl') { plugX -= 16; }
+                else if (solid.corner === 'tr') { plugY -= 16; }
+                else if (solid.corner === 'tl') { plugX -= 16; plugY -= 16; }
+
+                pushBrush(out, { x1: plugX, y1: plugY, z1: wallZ1, x2: plugX + 16, y2: plugY + 16, z2: wallZ2 }, wallTex);
+                if (cA.tile === TILE_TYPES.COURT) {
+                    pushBrush(out, { x1: plugX, y1: plugY, z1: wallZ2, x2: plugX + 16, y2: plugY + 16, z2: wallZ2 + 16 }, textures.outdoor.trim);
+                }
+            }
+        }
+    }
+
+    riserTransitions.forEach(t=>{
+        const {cellA:cA,cellB:cB,dir,brush,isOutdoor}=t;
+        const f_d=cA.floorZ-cB.floorZ;
+        if(Math.abs(f_d)>PLAYER_MAX_STEP_HEIGHT&&!cA.isLiquid&&!cB.isLiquid){
+            const stepTex=isOutdoor?textures.outdoor.stair:textures.indoor.stair;
+            if(f_d>0){
+                pushStaircase(out,cA.x*cellSize,cA.y*cellSize,cB.x*cellSize,cB.y*cellSize,cA.floorZ,cB.floorZ,dir,stepTex);
+            }else{
+                const invDir = dir === 's' ? 'n' : (dir === 'n' ? 's' : (dir === 'e' ? 'w' : 'e'));
+                pushStaircase(out,cB.x*cellSize,cB.y*cellSize,cA.x*cellSize,cA.y*cellSize,cB.floorZ,cA.floorZ,invDir,stepTex);
+            }
+        } else {
+            const riserTex=isOutdoor?textures.outdoor.wall:textures.indoor.wall;
+            pushBrush(out,brush,riserTex);
+        }
+    });
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+        const c=getCellInfo(x,y);
+        if(c && c.isLiquid){
+            const x1=x*cellSize,y1=y*cellSize,x2=x1+cellSize,y2=y1+cellSize;
+            let liquidTex;
+            if(liquid[y][x]===LIQUID_TYPES.SLIME) liquidTex=textures.liquid.slime;
+            else if(liquid[y][x]===LIQUID_TYPES.LAVA) liquidTex=textures.liquid.lava;
+            else liquidTex=textures.liquid.water;
+            pushBrush(out,{x1,y1,z1:c.h_info.bottom,x2,y2,z2:c.h_info.surface},liquidTex);
+        }
+    }
+    generateSkyBrushes(out, textures);
+    callback(out);
+}
+
+function generateSkyBrushes(out, textures) {
+    const {W, H, cfg} = WORLD;
+    const {cellSize} = cfg;
+    const visited = new Set();
+    const SKYBOX_WALL_OFFSET = 16;
+    const WALL_THICKNESS = 16;
+    const SKYBOX_HEIGHT_ABOVE_HIGHEST = 300;
+    
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            const cell = getCellInfo(x, y);
+            const isOpenAir = cell && (cell.tile === TILE_TYPES.COURT || cell.isLiquid);
+            if (!isOpenAir || visited.has(`${x},${y}`)) continue;
+            
+            const islandSet = new Set();
+            const q = [{ x, y }];
+            visited.add(`${x},${y}`);
+            islandSet.add(`${x},${y}`);
+            while (q.length > 0) {
+                const current = q.shift();
+                [{ dx: 0, dy: -1 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }].forEach(({ dx, dy }) => {
+                    const nx = current.x + dx, ny = current.y + dy;
+                    const key = `${nx},${ny}`;
+                    if(nx < 0 || nx >= W || ny < 0 || ny >= H) return;
+                    const neighbor = getCellInfo(nx, ny);
+                    const isNeighborOpenAir = neighbor && (neighbor.tile === TILE_TYPES.COURT || neighbor.isLiquid);
+                    if (isNeighborOpenAir && !visited.has(key)) {
+                        visited.add(key);
+                        islandSet.add(key);
+                        q.push({ x: nx, y: ny });
+                    }
+                });
+            }
+            
+            let highestWallTop = -Infinity;
+            islandSet.forEach(key => {
+                const [ix, iy] = key.split(',').map(Number);
+                const cA = getCellInfo(ix, iy);
+                const wallTop = cA.isLiquid ? cA.h_info.surface : cA.floorZ + 128;
+                highestWallTop = Math.max(highestWallTop, wallTop);
+            });
+            const skyCeilZ = highestWallTop + SKYBOX_HEIGHT_ABOVE_HIGHEST;
+
+            const islandCoords = Array.from(islandSet).map(k => k.split(',').map(Number));
+            const minX = Math.min(...islandCoords.map(p => p[0]));
+            const minY = Math.min(...islandCoords.map(p => p[1]));
+            const maxX = Math.max(...islandCoords.map(p => p[0]));
+            const maxY = Math.max(...islandCoords.map(p => p[1]));
+
+            pushBrush(out, {
+                x1: minX * cellSize - SKYBOX_WALL_OFFSET - WALL_THICKNESS, y1: minY * cellSize - SKYBOX_WALL_OFFSET - WALL_THICKNESS,
+                z1: skyCeilZ,
+                x2: (maxX + 1) * cellSize + SKYBOX_WALL_OFFSET + WALL_THICKNESS, y2: (maxY + 1) * cellSize + SKYBOX_WALL_OFFSET + WALL_THICKNESS,
+                z2: skyCeilZ + WALL_THICKNESS
+            }, textures.sky);
+
+            islandSet.forEach(key => {
+                const [ix, iy] = key.split(',').map(Number);
+                const cA = getCellInfo(ix, iy);
+                const currentCellWallTop = cA.isLiquid ? cA.h_info.surface : cA.floorZ + 128;
+                [{ dx: 0, dy: -1, dir: 'n' }, { dx: 1, dy: 0, dir: 'e' }, { dx: 0, dy: 1, dir: 's' }, { dx: -1, dy: 0, dir: 'w' }].forEach(({ dx, dy, dir }) => {
+                    if (islandSet.has(`${ix + dx},${iy + dy}`)) return;
+
+                    const cB = getCellInfo(ix + dx, iy + dy);
+                    let skyWallBaseZ = currentCellWallTop;
+                    if (cB && cB.tile !== TILE_TYPES.VOID) skyWallBaseZ = cB.ceilZ + 16;
+                    
+                    const cellLeftX = ix * cellSize, cellRightX = cellLeftX + cellSize;
+                    const cellTopY = iy * cellSize, cellBottomY = cellTopY + cellSize;
+                    let brush;
+                    if (dir === 'n') brush = { x1: cellLeftX, y1: cellTopY - SKYBOX_WALL_OFFSET - WALL_THICKNESS, z1: skyWallBaseZ, x2: cellRightX, y2: cellTopY - SKYBOX_WALL_OFFSET, z2: skyCeilZ };
+                    else if (dir === 's') brush = { x1: cellLeftX, y1: cellBottomY + SKYBOX_WALL_OFFSET, z1: skyWallBaseZ, x2: cellRightX, y2: cellBottomY + SKYBOX_WALL_OFFSET + WALL_THICKNESS, z2: skyCeilZ };
+                    else if (dir === 'w') brush = { x1: cellLeftX - SKYBOX_WALL_OFFSET - WALL_THICKNESS, y1: cellTopY, z1: skyWallBaseZ, x2: cellLeftX - SKYBOX_WALL_OFFSET, y2: cellBottomY, z2: skyCeilZ };
+                    else if (dir === 'e') brush = { x1: cellRightX + SKYBOX_WALL_OFFSET, y1: cellTopY, z1: skyWallBaseZ, x2: cellRightX + SKYBOX_WALL_OFFSET + WALL_THICKNESS, y2: cellBottomY, z2: skyCeilZ };
+                    if(brush) pushBrush(out, brush, textures.sky);
+                });
+            });
+
+            // CORNER WELD PASS
+            islandSet.forEach(key => {
+                const [cx,cy] = key.split(',').map(Number);
+                [{dx:1, dy:1}, {dx:-1, dy:1}, {dx:1, dy:-1}, {dx:-1, dy:-1}].forEach(({dx, dy}) => {
+                    if (islandSet.has(`${cx+dx},${cy}`) || islandSet.has(`${cx},${cy+dy}`)) return;
+                    if (!islandSet.has(`${cx+dx},${cy+dy}`)) {
+                        const cornerX = (cx + (dx > 0 ? 1 : 0)) * cellSize;
+                        const cornerY = (cy + (dy > 0 ? 1 : 0)) * cellSize;
+                        
+                        const cA = getCellInfo(cx,cy);
+                        const cB = getCellInfo(cx+dx,cy);
+                        const cC = getCellInfo(cx,cy+dy);
+                        let baseZ = cA.isLiquid ? cA.h_info.surface : cA.floorZ + 128;
+                        if (cB && cB.tile !== TILE_TYPES.VOID) baseZ = Math.max(baseZ, cB.ceilZ + 16);
+                        if (cC && cC.tile !== TILE_TYPES.VOID) baseZ = Math.max(baseZ, cC.ceilZ + 16);
+
+                        const plugX = cornerX + (dx > 0 ? SKYBOX_WALL_OFFSET : -SKYBOX_WALL_OFFSET - WALL_THICKNESS);
+                        const plugY = cornerY + (dy > 0 ? SKYBOX_WALL_OFFSET : -SKYBOX_WALL_OFFSET - WALL_THICKNESS);
+                        const mainPlug = { x1: plugX, y1: plugY, z1: baseZ, x2: plugX + WALL_THICKNESS, y2: plugY + WALL_THICKNESS, z2: skyCeilZ };
+                        
+                        let horizPlug, vertPlug;
+                        if (dx > 0) horizPlug = { x1: mainPlug.x1 - WALL_THICKNESS, y1: mainPlug.y1, z1: baseZ, x2: mainPlug.x1, y2: mainPlug.y2, z2: skyCeilZ };
+                        else        horizPlug = { x1: mainPlug.x2, y1: mainPlug.y1, z1: baseZ, x2: mainPlug.x2 + WALL_THICKNESS, y2: mainPlug.y2, z2: skyCeilZ };
+                        if (dy > 0) vertPlug  = { x1: mainPlug.x1, y1: mainPlug.y1 - WALL_THICKNESS, z1: baseZ, x2: mainPlug.x2, y2: mainPlug.y1, z2: skyCeilZ };
+                        else        vertPlug  = { x1: mainPlug.x1, y1: mainPlug.y2, z1: baseZ, x2: mainPlug.x2, y2: mainPlug.y2 + WALL_THICKNESS, z2: skyCeilZ };
+                        
+                        pushBrush(out, mainPlug, textures.sky);
+                        pushBrush(out, horizPlug, textures.sky);
+                        pushBrush(out, vertPlug, textures.sky);
+                    }
+                });
+            });
+        }
+    }
+}
+
+
+function getDefaultTextures(tex){const c={tex,rot:0,x_scale:1,y_scale:1};return{top:{...c,u:[1,0,0,0],v:[0,-1,0,0]},bottom:{...c,u:[1,0,0,0],v:[0,-1,0,0]},west:{...c,u:[0,1,0,0],v:[0,0,-1,0]},east:{...c,u:[0,1,0,0],v:[0,0,-1,0]},north:{...c,u:[1,0,0,0],v:[0,0,-1,0]},south:{...c,u:[1,0,0,0],v:[0,0,-1,0]}};}
+function pushBrush(out,b,bt){
+    b={x1:Math.round(b.x1),y1:Math.round(b.y1),z1:Math.round(b.z1),x2:Math.round(b.x2),y2:Math.round(b.y2),z2:Math.round(b.z2)};
+    if(b.x1>=b.x2||b.y1>=b.y2||b.z1>=b.z2)return;
+    const f=(v1,v2,v3,ft)=>`( ${v1} ) ( ${v2} ) ( ${v3} ) ${ft.tex} [ ${ft.u.join(' ')} ] [ ${ft.v.join(' ')} ] ${ft.rot} ${ft.x_scale} ${ft.y_scale}`;
+    out.push('{',f(`${b.x1} ${b.y2} ${b.z2}`,`${b.x2} ${b.y2} ${b.z2}`,`${b.x2} ${b.y1} ${b.z2}`,bt.top),f(`${b.x1} ${b.y1} ${b.z1}`,`${b.x2} ${b.y1} ${b.z1}`,`${b.x2} ${b.y2} ${b.z1}`,bt.bottom),f(`${b.x1} ${b.y2} ${b.z2}`,`${b.x1} ${b.y1} ${b.z2}`,`${b.x1} ${b.y1} ${b.z1}`,bt.west),f(`${b.x2} ${b.y2} ${b.z1}`,`${b.x2} ${b.y1} ${b.z1}`,`${b.x2} ${b.y1} ${b.z2}`,bt.east),f(`${b.x2} ${b.y2} ${b.z2}`,`${b.x1} ${b.y2} ${b.z2}`,`${b.x1} ${b.y2} ${b.z1}`,bt.north),f(`${b.x2} ${b.y1} ${b.z1}`,`${b.x1} ${b.y1} ${b.z1}`,`${b.x1} ${b.y1} ${b.z2}`,bt.south),'}');
+}
+function pushStaircase(out,h_x,h_y,l_x,l_y,h_z,l_z,dir,stepTex){const diff=h_z-l_z;const num=Math.max(1,Math.round(diff/STAIR_RISE));const step_rise=diff/num;const cs=WORLD.cfg.cellSize;for(let i=0;i<num;i++){const step_z_top=h_z-(i*step_rise);const z_bot=l_z;const sr=i*STAIR_RUN;let x1,y1,x2,y2;if(dir==='n'){x1=l_x;y1=l_y+cs-STAIR_RUN-sr;x2=l_x+cs;y2=y1+STAIR_RUN;}else if(dir==='s'){x1=l_x;y1=l_y+sr;x2=l_x+cs;y2=y1+STAIR_RUN;}else if(dir==='e'){y1=l_y;x1=l_x+sr;y2=l_y+cs;x2=x1+STAIR_RUN;}else{y1=l_y;x1=l_x+cs-STAIR_RUN-sr;y2=l_y+cs;x2=x1+STAIR_RUN;}pushBrush(out,{x1,y1,z1:z_bot,x2,y2,z2:step_z_top},stepTex);}}
+
+function formatBrush(brush, textures, texName) {
+    const bt = textures[texName];
+    if (!bt) { console.warn(`Texture key not found: ${texName}`); return ''; }
+    let b = brush;
+    b = {x1:Math.round(b.x1),y1:Math.round(b.y1),z1:Math.round(b.z1),x2:Math.round(b.x2),y2:Math.round(b.y2),z2:Math.round(b.z2)};
+    if (b.x1 >= b.x2 || b.y1 >= b.y2 || b.z1 >= b.z2) return '';
+    const f=(v1,v2,v3,ft)=>`( ${v1} ) ( ${v2} ) ( ${v3} ) ${ft.tex} [ ${ft.u.join(' ')} ] [ ${ft.v.join(' ')} ] ${ft.rot} ${ft.x_scale} ${ft.y_scale}`;
+    return [
+        '{',
+        f(`${b.x1} ${b.y2} ${b.z2}`, `${b.x2} ${b.y2} ${b.z2}`, `${b.x2} ${b.y1} ${b.z2}`, bt.top),
+        f(`${b.x1} ${b.y1} ${b.z1}`, `${b.x2} ${b.y1} ${b.z1}`, `${b.x2} ${b.y2} ${b.z1}`, bt.bottom),
+        f(`${b.x1} ${b.y2} ${b.z2}`, `${b.x1} ${b.y1} ${b.z2}`, `${b.x1} ${b.y1} ${b.z1}`, bt.west),
+        f(`${b.x2} ${b.y2} ${b.z1}`, `${b.x2} ${b.y1} ${b.z1}`, `${b.x2} ${b.y1} ${b.z2}`, bt.east),
+        f(`${b.x2} ${b.y2} ${b.z2}`, `${b.x1} ${b.y2} ${b.z2}`, `${b.x1} ${b.y2} ${b.z1}`, bt.north),
+        f(`${b.x2} ${b.y1} ${b.z1}`, `${b.x1} ${b.y1} ${b.z1}`, `${b.x1} ${b.y1} ${b.z2}`, bt.south),
+        '}'
+    ].join('\n');
+}
+
+function downloadMap(){
+    if(!WORLD){ alert('Forge a world first!'); return; }
+    setButtonsDisabled(true);
+    
+    try {
+        exportGeometryToMap(geo => {
+            setStatus('Finalizing...');
+            const textures = { detail: getDefaultTextures('64_grey_1'), trigger: getDefaultTextures('TRIGGER'), altar: getDefaultTextures('64_grey_1'), teleporter: getDefaultTextures('*tele01') };
+
+            const detailBrushes = WORLD.detailBrushes.map(b => formatBrush(b.brush, textures, b.texName));
+            
+            if (WORLD.altarCell) {
+                const { cellSize } = WORLD.cfg;
+                const { x: gx, y: gy } = WORLD.altarCell;
+                const cellInfo = getCellInfo(gx, gy);
+                if (cellInfo) {
+                    const z = cellInfo.floorZ;
+                    const w = 48, h = 48;
+                    const wallSurfaceX = (gx + 1) * cellSize - 16;
+                    const altarCenterX = wallSurfaceX - (w / 2);
+                    const altarCenterY = (gy + 0.5) * cellSize;
+                    
+                    const triggerVolume = {x1:altarCenterX-w/2, y1:altarCenterY-h/2, z1:z+16, x2:altarCenterX+w/2, y2:altarCenterY+h/2, z2:z+80};
+
+                    detailBrushes.push(formatBrush({x1:altarCenterX-w/2, y1:altarCenterY-h/2, z1:z,   x2:altarCenterX+w/2, y2:altarCenterY+h/2, z2:z+16}, textures, 'altar'));
+                    detailBrushes.push(formatBrush({x1:altarCenterX-w/2, y1:altarCenterY-h/2, z1:z+80, x2:altarCenterX+w/2, y2:altarCenterY+h/2, z2:z+96}, textures, 'altar'));
+                    detailBrushes.push(formatBrush(triggerVolume, textures, 'teleporter'));
+
+                    ENTITIES.push({classname:'trigger_changelevel', map: 'start', _is_trigger:true, ...triggerVolume});
+                    ENTITIES.push({classname:'light', x:altarCenterX, y:altarCenterY, z:z+48, light:200});
+                    ENTITIES.push({classname:'ambient_drone', x:altarCenterX, y:altarCenterY, z:z+48});
+                }
+            }
+
+            let targetRoom = null;
+            const courtyards = WORLD.rooms.filter(r => r.type === TILE_TYPES.COURT).sort((a,b) => (b.w*b.h) - (a.w*a.h));
+            if (courtyards.length > 0) {
+                targetRoom = courtyards[0];
+            } else if (WORLD.endRoomId !== null) {
+                targetRoom = WORLD.rooms.find(r => r.id === WORLD.endRoomId);
+            } else {
+                targetRoom = WORLD.rooms.sort((a,b) => (b.w*b.h) - (a.w*a.h))[0];
+            }
+
+            if(targetRoom) {
+                const cx = targetRoom.x + Math.floor(targetRoom.w / 2);
+                const cy = targetRoom.y + Math.floor(targetRoom.h / 2);
+                const cell = getCellInfo(cx, cy);
+                const originX = (cx + 0.5) * WORLD.cfg.cellSize;
+                const originY = (cy + 0.5) * WORLD.cfg.cellSize;
+                const originZ = cell.ceilZ - 48;
+                const yaw = randInt(0, 7, WORLD.rand) * 45;
+                ENTITIES.push({classname: 'info_intermission', x: originX, y: originY, z: originZ, mangle: `60 ${yaw} 0`});
+            }
+
+
+            const finalGeo=[...geo,...detailBrushes];
+            const mapOut=[ '{', '"classname" "worldspawn"', `"message" "Created with TDA's HTML Random Map Generator\\nLayout Seed: ${WORLD.cfg.layoutSeed}\\nEntity Seed: ${WORLD.cfg.entitySeed}"`, '"wad" ""', ...finalGeo, '}' ];
+            
+            ENTITIES.forEach(e => {
+                if(e._is_trigger){
+                    mapOut.push('{', `"classname" "${e.classname}"`);
+                    if(e.map) mapOut.push(`"map" "${e.map}"`);
+                    mapOut.push(formatBrush({x1:e.x1, y1:e.y1, z1:e.z1, x2:e.x2, y2:e.y2, z2:e.z2}, textures, 'trigger'));
+                    mapOut.push('}');
+                    return;
+                }
+                mapOut.push('{', `"classname" "${e.classname}"`, `"origin" "${Math.round(e.x)} ${Math.round(e.y)} ${Math.round(e.z)}"`);
+                if(e.angle!==undefined) mapOut.push(`"angle" "${e.angle}"`);
+                if(e.mangle!==undefined) mapOut.push(`"mangle" "${e.mangle}"`);
+                if(e.light!==undefined) mapOut.push(`"light" "${e.light}"`);
+                mapOut.push('}');
+            });
+
+            const data = mapOut.join('\n');
+            const blob = new Blob([data],{type:'text/plain'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download=`q1_gen_${WORLD.cfg.layoutSeed}.map`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            setStatus('Map file downloaded!');
+            setButtonsDisabled(false);
+        });
+    } catch (e) {
+        setStatus(`FATAL EXPORT ERROR:\n${e.message}\n\nCheck console for details.`);
+        console.error("Quake Map Generator EXPORT FAILED:", e);
+        setButtonsDisabled(false);
+    }
+}
+
+
+// --- PREVIEW ---
+function drawPreview(){
+    const canvas=$id('canvas');
+    const ctx=canvas.getContext('2d');
+    const cssWidth = canvas.clientWidth;
+    const cssHeight = canvas.clientHeight;
+    
+    if(!WORLD){
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle=PREVIEW_COLORS.bg_dark || '#05060a';
+        ctx.fillRect(0,0,cssWidth, cssHeight);
+        ctx.fillStyle=PREVIEW_COLORS.muted || '#9fb3ff';
+        ctx.font='16px sans-serif';ctx.textAlign='center';
+        ctx.fillText('Forge a world to see a preview.', cssWidth/2, cssHeight/2);
+        return;
+    }
+    const {W,H,grid,liquid,cfg}=WORLD;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle= PREVIEW_COLORS.bg_dark;
+    ctx.fillRect(0,0,cssWidth, cssHeight);
+    const pad=8;
+    const cellPx=Math.floor((Math.min(cssWidth,cssHeight)-pad*2)/Math.max(W,H,1));
+    const ox=Math.floor((cssWidth-cellPx*W)/2);
+    const oy=Math.floor((cssHeight-cellPx*H)/2);
+    for(let y=0;y<H;y++){for(let x=0;x<W;x++){
+        let color;
+        const tile=grid[y][x];
+        if(tile===TILE_TYPES.ROOM)color=PREVIEW_COLORS.room;
+        else if(tile===TILE_TYPES.CORR)color=PREVIEW_COLORS.corr;
+        else if(tile===TILE_TYPES.COURT)color=PREVIEW_COLORS.court;
+        else continue;
+        const liq=liquid[y][x];
+        if(liq===LIQUID_TYPES.WATER)color=PREVIEW_COLORS.water;
+        else if(liq===LIQUID_TYPES.SLIME)color=PREVIEW_COLORS.slime;
+        else if(liq===LIQUID_TYPES.LAVA)color=PREVIEW_COLORS.lava;
+        ctx.fillStyle=color;
+        ctx.fillRect(ox+x*cellPx,oy+(H-1-y)*cellPx,cellPx-0.5,cellPx-0.5);
+    }}
+    ctx.font=`${Math.max(10,Math.floor(cellPx*0.8))}px monospace`;
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ENTITIES.forEach(e=>{
+        if (!e._spot) return;
+        const {x: sx, y: sy} = e._spot;
+
+        const px = ox + sx * cellPx + cellPx/2;
+        const py = oy + (H-1-sy) * cellPx + cellPx/2;
+
+        let char='?',color='#ffd86b';
+        if(e.classname.startsWith('monster_')){char='M';color='#ff7474';}
+        else if(e.classname.startsWith('weapon_')){char='W';color='#7ea8ff';}
+        else if(e.classname.startsWith('item_')){char='I';color='#b1f2a1';}
+        if(e.classname.startsWith('info_player_')){char='S';color='#ffffff';if(e.classname==='info_player_deathmatch')char='D';if(e.classname==='info_player_coop')char='C';}
+        else if(e.classname==='light'||e._is_trigger||e.classname.startsWith('ambient_')||e.classname.startsWith('info_intermission'))return;
+        ctx.fillStyle=color;
+        ctx.fillText(char,px,py+1);
+    });
+}
+
+function handleCanvasResize() {
+    const canvas = $id('canvas');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        drawPreview();
+    }
+}
+
+
+// --- UI WIRING ---
+$id('forgeBtn').onclick = () => { 
+    $id('layoutSeed').value = Math.floor(Math.random() * 9999999);
+    forgeWorld(); 
+};
+$id('spawnEntitiesBtn').onclick = () => {
+    if(!WORLD) { setStatus("Must forge a world first."); return; }
+    $id('entitySeed').value = Math.floor(Math.random() * 9999999);
+    spawnEntities();
+};
+$id('forgeFromSeedsBtn').onclick = () => {
+    forgeWorld();
+    if(WORLD) { 
+        setTimeout(spawnEntities, 10);
+    }
+};
+$id('downloadBtn').onclick = downloadMap;
+$id('modeDM').addEventListener('change', e => { $id('dmOptions').style.display = e.target.checked ? 'flex' : 'none'; });
+
+// --- INITIALIZATION ---
+(() => {
+    const rootStyle = getComputedStyle(document.documentElement);
+    PREVIEW_COLORS = {
+        room: rootStyle.getPropertyValue('--room').trim(),
+        court: rootStyle.getPropertyValue('--court').trim(),
+        corr: rootStyle.getPropertyValue('--corr').trim(),
+        water: rootStyle.getPropertyValue('--water').trim(),
+        slime: rootStyle.getPropertyValue('--slime').trim(),
+        lava: rootStyle.getPropertyValue('--lava').trim(),
+        bg_dark: '#05060a',
+        muted: rootStyle.getPropertyValue('--muted').trim()
+    };
+
+    const resizeObserver = new ResizeObserver(()=>{ handleCanvasResize(); });
+    resizeObserver.observe($id('canvas'));
+    handleCanvasResize();
+
+    $id('layoutSeed').value = Math.floor(Math.random() * 9999999);
+    $id('entitySeed').value = Math.floor(Math.random() * 9999999);
+    forgeWorld();
+    if (WORLD) {
+        spawnEntities();
+    }
+})();
+
+</script>
+</body>
+</html>
