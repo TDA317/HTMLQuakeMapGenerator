@@ -78,7 +78,7 @@ This generator is currently hard-coded to use textures from **Aleksander "Mar-sa
 
 *   **You can download it here:** [Prototype WAD on Slipseer](https://www.slipseer.com/index.php?resources/prototype-wad.263/)
 
-After downloading the `.map` file, you MUST open it in a text editor (like Notepad++) and edit the `worldspawn` entity to point to the location of your WAD file. Change this line:
+After downloading the `.map` file, you MUST edit the `worldspawn` entity to point to the location of your WAD file. Change this line:
 "wad" " "
 To this:
 "wad" "C:\path\to\your\wads\prototype_basic_1_3.wad; C:\path\to\your\wads\prototype_liquids_1_3.wad; C:\path\to\your\wads\prototype_Skies_1_3.wad"
