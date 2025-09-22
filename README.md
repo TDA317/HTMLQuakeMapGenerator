@@ -20,13 +20,25 @@ This is an early, alpha release. The machine is stable, but it's not finished. H
 
 Issues:
 *   **Z-Fighting:** Textures overlap places. Occasionally you'll see a little bit of sky peaking through places it shouldn't because of this. I had worked on it for this version but rolled back due to some repeated issues. Will address again later
-*   **Lighting:** Lighting is place holder at best. Next thing to be addressed.
-*   **Entities:** Sometimes entities/spawn points will clip into walls or stairs. Its much improved but still not perfect.
+*   ~~**Lighting:** Lighting is place holder at best. Next thing to be addressed.~~
+*   **Entities:** Sometimes entities/spawn points will clip into walls or stairs. Its much improved but still not perfect. **fixed through brute force?**
 *   **Geometry:** Being that this is random, some impossible geometry and architecture is made. Large rooms next to a courtyard where you'd definitely see the large room's outside walls over the courtyard wall, etc. and sometimes impassible obstacles. If you go beyond the default vertical variation, the ability to go from room to room quickly falls apart. Can be helped by making the minimum ceiling heights larger too, but there are limits.
+
+## Alpha v 1.080 notes:
+*   **Improved item and enemy placement**
+* Last version more logically placed things in the space. But, items and enemies would get stuck in stairs sometimes. This brute force fixes that by dropping them from higher up. 
+*   **LIGHTS**
+* Place holder "one light per room" lighting is gone. Now, we have some lighting themes to choose from. Normal, Murky, Dramatic (more flashing lights), and Blackout (very dark has some very low level lights scattered around)
+* Early theme support added with light improvements. Normal, Murky, Dynamic, and Blackout for indoor, Normal, Bright Sun, and Dim Night themes for outdoor/skybox areas. 
+* Outdoor lights set with a light with the added _sun property and target suntar. An info_null with targetname : suntar placed randomly below it.
+*   **Architecture and world sealing**
+* Some architectural elements removed. Drop ceilings and ceiling openings over liquid pools being most notable. Both started as bugs and were left in for architectural interest. But, lead to issues sealing the world and with player 'head clearance'
+* Improved checking for player's 'head clearance' when moving to rooms of different elevations. Stairs and clearance issues still quickly become issues as you increase vertical variation values beyond default.
+* More often than not, the world will actually be sealed. Almost always at default settings.
 
 ## Alpha v1.064 notes:
 *   **Improved item and enemy placement**
-* The last version let a lot of room for improvement. Lots of things clipped in walls and floors. It is much improved but still not perfect.
+* The last version left a lot of room for improvement. Lots of things clipped in walls and floors. It is much improved but still not perfect.
 * Fish are ACTUALLY in the water. 
 * Check box in GUI to enable "major items on pedistals" places a brush under armor, power ups, and a few weapons as well as a light at the center of the object. Adds a bit of focus and specialness to these otherwise randomly placed items.
 *   **Skyboxes**
