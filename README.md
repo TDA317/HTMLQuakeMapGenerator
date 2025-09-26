@@ -21,8 +21,16 @@ This is an early, alpha release. The machine is stable, but it's not finished. H
 Issues:
 *   **Z-Fighting:** Textures overlap places. Occasionally you'll see a little bit of sky peaking through places it shouldn't because of this. I had worked on it for this version but rolled back due to some repeated issues. Will address again later
 *   ~~**Lighting:** Lighting is place holder at best. Next thing to be addressed.~~
-*   **Entities:** Sometimes entities/spawn points will clip into walls or stairs. Its much improved but still not perfect. **fixed through brute force?**
+*   **Entities:** Sometimes entities/spawn points will clip into walls or stairs. Its much improved but still not perfect. **Fixed again, again, again**
 *   **Geometry:** Being that this is random, some impossible geometry and architecture is made. Large rooms next to a courtyard where you'd definitely see the large room's outside walls over the courtyard wall, etc. and sometimes impassible obstacles. If you go beyond the default vertical variation, the ability to go from room to room quickly falls apart. Can be helped by making the minimum ceiling heights larger too, but there are limits.
+
+## Alpha v 1.085 notes:
+*   **Improved item and enemy placement**
+* Major overhall of entity placement, stairs placement is much improved. Still edge case errors but they are much more edge case than ever before. 
+* Smarter spot-finding with bounding box and checks of what is under feet.
+* "Fixed" the "End Alter" and item podiums to not be floating if placed on stairs.
+* Better info_intermission and _sun light handling
+* Texture Z-Fighting issues greatly reduced by a few architectural tweaks. Main remaining issue are direct room to courtyard indoor/outdoor wall joints.
 
 ## Alpha v 1.080 notes:
 *   **Improved item and enemy placement**
